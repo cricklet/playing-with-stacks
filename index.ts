@@ -1,3 +1,4 @@
+import * as html2canvas from 'html2canvas'
 
 const randomColor = (): string => {
   var letters = '0123456789ABCDEF';
@@ -89,7 +90,7 @@ interface Layout {
   }
 }
 
-const computeMeasurementsForNode = (node: SceneNode, parent: FrameNode | null, measurements: { [id: string]: Measurements }, options: { forceWidth?: number }): Measurements => {
+const computeMeasurementsForNode = (node: SceneNode, parent: FrameNode | undefined, measurements: { [id: string]: Measurements }, options: { forceWidth?: number }): Measurements => {
   if (options.forceWidth && node.type !== 'text') {
     throw Error('you only need to force width for text nodes')
   }
@@ -103,7 +104,7 @@ const computeMeasurementsForNode = (node: SceneNode, parent: FrameNode | null, m
       computedHeight: node.height
     }
   } else if (node.type === 'text') {
-    if (parent.alignment.horizontalAlignment === 'FILL' && !options.forceWidth) {
+    if (parent && parent.alignment.horizontalAlignment === 'FILL' && !options.forceWidth) {
       return {
         idealWidth: 0,
         idealHeight: 0,
@@ -112,7 +113,7 @@ const computeMeasurementsForNode = (node: SceneNode, parent: FrameNode | null, m
         isDirty: true
       }
     } else {
-      const textEl = document.getElementById('hidden')
+      const textEl = document.getElementById('hidden') as HTMLElement
       textEl.style.width =
           node.fixedWidth ? `${node.fixedWidth}px`
         : options.forceWidth ? `${options.forceWidth}px`
@@ -229,9 +230,15 @@ const render = (root: SceneNode, layout: Layout, ctx: CanvasRenderingContext2D) 
       ctx.fillStyle = node.color
       ctx.fillRect(nodeLayout.x, nodeLayout.y, nodeLayout.width, nodeLayout.height)
     } else if (node.type === 'text') {
-      const textEl = document.getElementById('hidden')
+      const textEl = document.getElementById('hidden') as HTMLElement
       textEl.style.width = `${nodeLayout.width}px`
       textEl.innerText = node.text
+      // html2canvas(textEl, {
+      //   onrendered: function (image) {
+      //     ctx.drawImage(image, 0, 0, 100, 100);
+      //   }
+      // })
+    
       ctx.strokeStyle = '#000'
       ctx.strokeText(node.text, nodeLayout.x, nodeLayout.y, nodeLayout.width)
     } else {
