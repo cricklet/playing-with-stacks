@@ -52,7 +52,6 @@ interface TextNode {
   type: 'text'
   id: string
   text: string
-  padding: number
   fixedWidth?: number
 }
 
@@ -68,7 +67,7 @@ interface SecondPassLayout {
   y: number,
   width: number,
   height: number,
-  needsTextReflow?: boolean,
+  isDirty: boolean
 }
 
 interface FinalPassLayout {
@@ -85,11 +84,7 @@ interface NodeLayout {
 
   // In the second layout pass (top down, root => children), we determine the locations of all nodes, and stretch
   // all nodes that are found within a `fill` alignment.
-  secondPass?: SecondPassLayout,
-
-  // Finally, in the last (optional) layout pass (bottom up, child => root), we reflow any text nodes that were
-  // stretched in the second pass and adjust all siblings/parents.
-  finalPass?: FinalPassLayout
+  secondPass?: SecondPassLayout
 }
 
 interface Layout {
@@ -124,19 +119,37 @@ const getTextLayout = (text: string, maxWidth?: number): { lines: string[], line
   return { lines, width: maxWidth, height: lines.length * 12, lineHeight: 12 };
 }
 
-const computeMeasurementsForNode = (
-  node: SceneNode,
-  parent: FrameNode | undefined,
-  getChildSize: (child: SceneNode) => { width: number, height: number, },
-  options: { forceWidth?: number }
+const computeMeasurementForText = (
+  text: string, width: number | 'auto' | 'fill'
 ): {
   width: number,
   height: number,
 } => {
-  if (options.forceWidth && node.type !== 'text') {
-    throw Error('you only need to force width for text nodes')
+  if (width === 'fill') {
+    return {
+      width: 0, height: 0
+    }
+  } else {
+    const maxWidth = width === 'auto' ? undefined : width
+    const textLayout = getTextLayout(text, maxWidth)
+    return {
+      width: textLayout.width,
+      height: textLayout.height
+    }
   }
+}
 
+const computeMeasurementsForNode = (
+  node: SceneNode,
+  options: {
+    getSizeOfChild: (child: SceneNode) => { width: number, height: number, },
+    horizontalAlignment: 'MIN' | 'FILL' | undefined
+    forceWidth: number | undefined
+  }
+): {
+  width: number,
+  height: number,
+} => {
   if (node.type === 'rectangle') {
     // Rectangles are easy :)
     return {
@@ -144,20 +157,12 @@ const computeMeasurementsForNode = (
       height: node.height
     }
   } else if (node.type === 'text') {
-    if (parent && parent.alignment.horizontalAlignment === 'FILL' && !options.forceWidth) {
-      return {
-        width: 2 * node.padding,
-        height: 2 * node.padding,
-      }
-    } else {
-      const maxWidth = node.fixedWidth ? node.fixedWidth : options.forceWidth ? options.forceWidth : undefined
-      const textLayout = getTextLayout(node.text, maxWidth)
+    const maxWidth =
+      (node.fixedWidth != null) ? node.fixedWidth :
+      (options.forceWidth != null) ? options.forceWidth :
+      (options.horizontalAlignment === 'FILL') ? 'fill' : 'auto'
 
-      return {
-        width: textLayout.width + 2 * node.padding,
-        height: textLayout.height + 2 * node.padding,
-      }
-    }
+    return computeMeasurementForText(node.text, maxWidth)
   } else if (node.type === 'frame') {
     // We need to calculate the size of frames by measuring children.
     let idealWidth = 0
@@ -165,11 +170,11 @@ const computeMeasurementsForNode = (
 
     for (const child of node.children) {
       if (node.alignment.type === 'HORIZONTAL') {
-        idealWidth += getChildSize(child).width
-        idealHeight = Math.max(idealHeight, getChildSize(child).height)
+        idealWidth += options.getSizeOfChild(child).width
+        idealHeight = Math.max(idealHeight, options.getSizeOfChild(child).height)
       } else {
-        idealWidth = Math.max(idealWidth, getChildSize(child).width)
-        idealHeight += getChildSize(child).height
+        idealWidth = Math.max(idealWidth, options.getSizeOfChild(child).width)
+        idealHeight += options.getSizeOfChild(child).height
       }
     }
 
@@ -194,7 +199,22 @@ const computeMeasurementsForNode = (
 }
 
 const computeSceneLayout = (root: SceneNode): Layout => {
-  const layout: Layout = {}
+  const _layout: Layout = {}
+  const getOrAddLayout = (node: SceneNode): NodeLayout => {
+    if (node.id in _layout) {
+      return _layout[node.id]
+    } else {
+      _layout[node.id] = {}
+      return _layout[node.id]
+    }
+  }
+  const getLayout = (node:SceneNode): NodeLayout => {
+    if (node.id in _layout) {
+      return _layout[node.id]
+    } else {
+      throw Error()
+    }
+  }
 
   const firstLayoutPass = (node: SceneNode, parent?: FrameNode) => {
     // In the first layout pass (bottom up, child => root), we optimistically estimate the sizes of all nodes.
@@ -205,88 +225,110 @@ const computeSceneLayout = (root: SceneNode): Layout => {
       }
     }
 
-    layout[node.id] = {
-      firstPass: computeMeasurementsForNode(node, parent, (child) => layout[child.id].firstPass as FirstPassLayout, {})
+    const nodeLayout: NodeLayout = getOrAddLayout(node)
+
+    if (nodeLayout.secondPass != null && !nodeLayout.secondPass.isDirty) {
+      // We're already done!
+      return
     }
+
+    const newMeasurements = computeMeasurementsForNode(node, {
+      horizontalAlignment: parent ? parent.alignment.horizontalAlignment : undefined,
+      forceWidth: node.type === 'text' && nodeLayout.secondPass ? nodeLayout.secondPass.width : undefined,
+      getSizeOfChild: (child) => getLayout(child).firstPass as FirstPassLayout
+    })
+    nodeLayout.firstPass = newMeasurements
   }
 
   const secondLayoutPass = (root: SceneNode) => {
     // In the second layout pass (top down, root => children), we determine the locations of all nodes, and stretch
     // all nodes that are found within a `fill` alignment.
 
-    const traverse = (parent: SceneNode) => {
-      if (parent.type !== 'frame') {
-        return
+    const recursiveLayoutReturningDirtyState = (node: SceneNode): boolean => {
+      if (node.type !== 'frame') {
+        return false
       }
-      let x = parent.padding
-      let y = parent.padding
-      const parentSecondLayout = layout[parent.id].secondPass as SecondPassLayout
 
-      for (const child of parent.children) {
-        const childFirstLayout = layout[child.id].firstPass as FirstPassLayout
-        const needsTextReflow = child.type === 'text' && parent.alignment.horizontalAlignment === 'FILL'
+      let x = node.padding
+      let y = node.padding
+      const parentSecondLayout = getLayout(node).secondPass as SecondPassLayout
 
-        layout[child.id].secondPass = {
+      let hasDirtyChildren = false
+
+      for (const child of node.children) {
+        const childFirstLayout = getLayout(child).firstPass as FirstPassLayout
+        const needsTextReflow = child.type === 'text' && node.alignment.horizontalAlignment === 'FILL'
+
+        const childSecondLayout = {
           x,
           y,
-          width: parent.alignment.horizontalAlignment === 'FILL' ? parentSecondLayout.width - parent.padding * 2 : childFirstLayout.width,
-          height: parent.alignment.verticalAlignment === 'FILL' ? parentSecondLayout.height - parent.padding * 2 : childFirstLayout.height,
-          needsTextReflow
+          width: node.alignment.horizontalAlignment === 'FILL' ? parentSecondLayout.width - node.padding * 2 : childFirstLayout.width,
+          height: node.alignment.verticalAlignment === 'FILL' ? parentSecondLayout.height - node.padding * 2 : childFirstLayout.height,
+          isDirty: needsTextReflow
         }
 
-        if (parent.alignment.type === 'HORIZONTAL') {
-          x += childFirstLayout.width + parent.spacing
+        if (node.alignment.type === 'HORIZONTAL') {
+          x += childFirstLayout.width + node.spacing
         } else {
-          y += childFirstLayout.height + parent.spacing
+          y += childFirstLayout.height + node.spacing
         }
 
-        traverse(child)
+        getLayout(child).secondPass = childSecondLayout
+        const childHasDirtyChildren = recursiveLayoutReturningDirtyState(child)
+        if (childHasDirtyChildren && !childSecondLayout.isDirty) {
+          childSecondLayout.isDirty = childHasDirtyChildren
+        }
+
+        hasDirtyChildren = hasDirtyChildren || needsTextReflow || childHasDirtyChildren
       }
+
+      return hasDirtyChildren
     }
 
-    const rootFirstLayout = layout[root.id].firstPass as FirstPassLayout
-    layout[root.id].secondPass = {
+    // Set the root node's layout (this is easy)
+    const rootLayout = getLayout(root)
+    const rootFirstLayout = rootLayout.firstPass as FirstPassLayout
+    const rootSecondLayout = {
       x: 0,
       y: 0,
       width: rootFirstLayout.width,
-      height: rootFirstLayout.height
+      height: rootFirstLayout.height,
+      isDirty: false
     }
+    rootLayout.secondPass = rootSecondLayout
 
-    traverse(root)
+    // Traverse down setting all the children/grandchildren's layouts. Then, mark the root as dirty
+    // if any of the descendants were dirty.
+    const isDirty = recursiveLayoutReturningDirtyState(root)
+    if (isDirty && !rootSecondLayout.isDirty) {
+      rootSecondLayout.isDirty = isDirty
+    }
   }
 
-  const thirdLayoutPass = (root: SceneNode) => {
-    // Finally, in the last (optional) layout pass (bottom up, child => root), we reflow any text nodes that were
-    // stretched in the second pass and adjust all siblings/parents.
-
-    const traverse = (node: SceneNode) => {
-      // if (node.type === 'text') {
-      //   node.
-      // }
-
-      if (node.type === 'frame') {
-        for (const child of node.children) {
-          traverse(child)
-        }
-      }
-
-      layout[node.id].finalPass = {
-        ... layout[node.id].secondPass as SecondPassLayout
-      }
-    }
-
-    traverse(root)
-  }
-
+  console.log('First pass -------------------------------------------------')
   firstLayoutPass(root)
+  for (const id in _layout) {
+    console.log(id, _layout[id].firstPass)
+  }
+
+  console.log('Second pass ------------------------------------------------')
   secondLayoutPass(root)
-  thirdLayoutPass(root)
-  return layout
+  for (const id in _layout) {
+    console.log(id, _layout[id].secondPass)
+  }
+
+  const rootSecondLayout = getLayout(root).secondPass as SecondPassLayout
+  if (rootSecondLayout.isDirty) {
+    firstLayoutPass(root)
+    secondLayoutPass(root)
+  }
+
+  return _layout
 }
 
-const render = (root: SceneNode, layout: Layout, ctx: CanvasRenderingContext2D) => {
+const render = (root: SceneNode, sceneLayout: Layout, ctx: CanvasRenderingContext2D) => {
   const renderSubtree = (node: SceneNode) => {
-    const nodeLayout = layout[node.id].finalPass as FinalPassLayout
+    const nodeLayout = sceneLayout[node.id].secondPass as SecondPassLayout
 
     if (node.type === 'frame') {
       ctx.fillStyle = node.color
@@ -302,7 +344,7 @@ const render = (root: SceneNode, layout: Layout, ctx: CanvasRenderingContext2D) 
       const textLayout = getTextLayout(node.text, nodeLayout.width)
       for (let i = 0; i < textLayout.lines.length; i ++) {
         const line = textLayout.lines[i]
-        ctx.strokeText(line, nodeLayout.x + node.padding, nodeLayout.y + node.padding + textLayout.lineHeight * (i + 0.8))
+        ctx.strokeText(line, nodeLayout.x, nodeLayout.y + textLayout.lineHeight * (i + 0.8))
       }
     } else {
       throw Error()
@@ -337,8 +379,15 @@ const render = (root: SceneNode, layout: Layout, ctx: CanvasRenderingContext2D) 
 //     {
 //       type: 'text',
 //       id: newGUID(),
-//       text: 'hello!\n this is some text. isn\'t it grand\nyes!'
-//     }
+//       text: 'blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah'
+//     },
+//     {
+//       type: 'rectangle',
+//       id: newGUID(),
+//       width: 100,
+//       height: 80,
+//       color: randomColor(),
+//     },
 //   ]
 // }
 
@@ -360,7 +409,6 @@ const scene: SceneNode = {
       id: newGUID(),
       text: `XXX hello! this is some text. yes! blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah`,
       fixedWidth: 200,
-      padding: 2,
     },
     {
       type: 'rectangle',
@@ -448,7 +496,6 @@ const scene: SceneNode = {
               type: 'text',
               id: newGUID(),
               text: `XXX hello! this is some text. yes! blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah`,
-              padding: 2,
             },
           ]
         },
@@ -514,22 +561,10 @@ const ctx = el.getContext("2d") as CanvasRenderingContext2D
 ctx.fillStyle = "#eee"
 ctx.fillRect(0, 0, el.width, el.height)
 
-const layout = computeSceneLayout(scene)
-console.log('First pass -------------------------------------------------')
-for (const id in layout) {
-  console.log(id, layout[id].firstPass)
-}
-console.log('Second pass ------------------------------------------------')
-for (const id in layout) {
-  console.log(id, layout[id].secondPass)
-}
-console.log('Final pass -------------------------------------------------')
-for (const id in layout) {
-  console.log(id, layout[id].finalPass)
-}
+const sceneLayout = computeSceneLayout(scene)
 
 // render the scene!
-render(scene, layout, ctx)
+render(scene, sceneLayout, ctx)
 
 console.log(ctx)
 console.log('done')
