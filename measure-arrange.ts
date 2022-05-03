@@ -147,7 +147,12 @@ export const computeLayoutViaMeasureArrange = (root: SceneNode): FinalLayout => 
     }
   }
 
+  // In this bottom-up pass, we use the sizes of each container's children to determine a size for
+  // the container.
   firstLayoutPass(root)
+
+  // In this top-down pass, we use the prior sizes to arrange & stretch the children within each
+  // container.
   secondLayoutPass(root)
 
   const rootSecondLayout = getLayout(root).secondPass as SecondPassLayout
