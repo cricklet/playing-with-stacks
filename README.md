@@ -1,6 +1,6 @@
 # playing-with-stacks
 
-compile with: `tsc index.ts --watch --strictNullChecks --noImplicitAny`
+compile with: `esbuild --watch --bundle index.ts --outfile=index.js`
 
 open `index.html` in the browser!
 

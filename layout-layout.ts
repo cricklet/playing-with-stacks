@@ -11,61 +11,87 @@ interface SizingResult {
 }
 
 export const computeLayoutViaLayoutLayout = (root: SceneNode): FinalLayout => {
-  const textNeedingReflow: Set<string> = new Set<string>()
+  const widthsForTextNeedingReflow: { [id: string]: number } = {}
   const finalLayout: FinalLayout = {}
 
-  const layout = (node: SceneNode, parent: FrameNode | undefined, performLayout: PerformLayout): SizingResult => {
-    if (node.type === 'rectangle') {
-      return computeMeasurementsForRectangle(node)
-    } else if (node.type === 'text') {
-      const nodeLayout = finalLayout[node.id]
+  let sizingCache = {}
 
-      if (nodeLayout && !textNeedingReflow.has(node.id)) {
-        return { width: nodeLayout.width, height: nodeLayout.height }
-      } else {
-        return computeMeasurementsForText(node,
-          parent ? parent.alignment.horizontalAlignment : undefined,
-          nodeLayout ? nodeLayout.width : undefined)
-      }
+  const layout = (node: SceneNode, parent: FrameNode | undefined, performLayout: PerformLayout): SizingResult => {
+    if (node.id in sizingCache && performLayout === PerformLayout.NO) {
+      return sizingCache[node.id]
     }
 
-    const frameSize = computeMeasurementsForFrame(node,
-      (child: SceneNode) => layout(child, node, PerformLayout.NO))
+    let nodeSize
+    switch (node.type) {
+      case 'rectangle':
+        nodeSize = computeMeasurementsForRectangle(node)
+        break
+      case 'text':
+        const fixedWidthForReflow = widthsForTextNeedingReflow[node.id]
+        nodeSize = computeMeasurementsForText(node,
+          parent ? parent.alignment.horizontalAlignment : undefined,
+          fixedWidthForReflow != null ? fixedWidthForReflow : undefined)
+        break
+      case 'frame':
+        // During the first layout method call, we run this recursively to compute measurements (eg similar
+        // to the measure pass of the measure/arrange algorithm). During the second layout method call, we
+        // don't run this call because the sizing should been cached already.
+        nodeSize = computeMeasurementsForFrame(node, (child: SceneNode) => layout(child, node, PerformLayout.NO))
+        break
+    }
 
     if (performLayout == PerformLayout.NO) {
-      return frameSize
+      sizingCache[node.id] = nodeSize
+      return nodeSize
     }
 
-    let x = node.padding
-    let y = node.padding
+    if (node.type === 'frame') {
+      let x = node.padding
+      let y = node.padding
 
-    for (const child of node.children) {
-      // Perform layout on grandchildren and get current child size
-      const childSizing = layout(child, node, PerformLayout.YES)
-      const needsTextReflow = child.type === 'text' && node.alignment.horizontalAlignment === 'FILL'
+      for (const child of node.children) {
+        // Perform layout on grandchildren and get current child size
+        const childSizing = layout(child, node, PerformLayout.YES)
+        const needsTextReflow = child.type === 'text' && node.alignment.horizontalAlignment === 'FILL'
 
-      finalLayout[child.id] = {
-        x, y,
-        width: node.alignment.horizontalAlignment === 'FILL' ? frameSize.width - node.padding * 2 : childSizing.width,
-        height: node.alignment.verticalAlignment === 'FILL' ? frameSize.height - node.padding * 2 : childSizing.height,
-      }
+        const finalWidth = node.alignment.horizontalAlignment === 'FILL' ? nodeSize.width - node.padding * 2 : childSizing.width
+        const finalHeight = node.alignment.verticalAlignment === 'FILL' ? nodeSize.height - node.padding * 2 : childSizing.height
 
-      if (needsTextReflow) {
-        textNeedingReflow.add(child.id)
-      }
+        finalLayout[child.id] = {
+          x, y,
+          width: finalWidth,
+          height: finalHeight,
+        }
 
-      if (node.alignment.type === 'HORIZONTAL') {
-        x += childSizing.width + node.spacing
-      } else {
-        y += childSizing.height + node.spacing
+        if (needsTextReflow) {
+          widthsForTextNeedingReflow[child.id] = finalWidth
+        }
+
+        if (node.alignment.type === 'HORIZONTAL') {
+          x += childSizing.width + node.spacing
+        } else {
+          y += childSizing.height + node.spacing
+        }
       }
     }
 
-    return frameSize
+    return nodeSize
   }
 
+  // Our first layout call serves the same purpose as a measurement pass in the measure/arrange
+  // algorithm. Here, we figure out the sizes of all containers based on the sizes of their children.
+  layout(root, undefined, PerformLayout.NO)
+
+  // Our second layout call finalizes the layout (arrangement / resizing). It re-uses the cached
+  // sizing that we calculated in that first layout call.
   let rootSize = layout(root, undefined, PerformLayout.YES)
-  if (textNeedingReflow) {
+
+  if (widthsForTextNeedingReflow) {
+    // TODO: we clear the sizing cache so that all sizes dependent on reflowed text will be
+    // recomputed. We could be smarter and figure out which sizes need to be cleared and only
+    // clear those.
+    sizingCache = {}
+    layout(root, undefined, PerformLayout.NO)
     rootSize = layout(root, undefined, PerformLayout.YES)
   }
 
