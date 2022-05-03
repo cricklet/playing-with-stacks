@@ -75,6 +75,8 @@ export const computeLayoutViaMeasureArrange = (root: SceneNode): FinalLayout => 
         newMeasurements = computeMeasurementsForText(
           node,
           parent ? parent.alignment.horizontalAlignment : undefined,
+          // This will only be set if we've already done our initial 2-pass
+          // algorithm and determined there was text still needs reflow.
           nodeLayout.secondPass ? nodeLayout.secondPass.width : undefined)
         break
     }
