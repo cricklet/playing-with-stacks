@@ -147,20 +147,12 @@ export const computeLayoutViaMeasureArrange = (root: SceneNode): FinalLayout => 
     }
   }
 
-  console.log('First pass -------------------------------------------------')
   firstLayoutPass(root)
-  for (const id in _layout) {
-    console.log(id, _layout[id].firstPass)
-  }
-
-  console.log('Second pass ------------------------------------------------')
   secondLayoutPass(root)
-  for (const id in _layout) {
-    console.log(id, _layout[id].secondPass)
-  }
 
   const rootSecondLayout = getLayout(root).secondPass as SecondPassLayout
   if (rootSecondLayout.isDirty) {
+    // These extra layout passes happen when there are stretched text that now need to be reflowed
     firstLayoutPass(root)
     secondLayoutPass(root)
   }
