@@ -11,41 +11,45 @@ const randomColor = (): string => {
   return color;
 }
 
-const render = (root: SceneNode, sceneLayout: FinalLayout, ctx: CanvasRenderingContext2D) => {
+function render(root: SceneNode, sceneLayout: FinalLayout, ctx: CanvasRenderingContext2D) {
   const renderSubtree = (node: SceneNode) => {
-    const nodeLayout = sceneLayout[node.id]
+    const nodeLayout = sceneLayout[node.id];
+    if (nodeLayout == null) {
+      console.error('no layout found for', node.id)
+      return
+    }
 
     if (node.type === 'frame') {
-      ctx.fillStyle = node.color
-      ctx.fillRect(nodeLayout.x, nodeLayout.y, nodeLayout.width, nodeLayout.height)
+      ctx.fillStyle = node.color;
+      ctx.fillRect(nodeLayout.x, nodeLayout.y, nodeLayout.width, nodeLayout.height);
     } else if (node.type === 'rectangle') {
-      ctx.fillStyle = node.color
-      ctx.fillRect(nodeLayout.x, nodeLayout.y, nodeLayout.width, nodeLayout.height)
+      ctx.fillStyle = node.color;
+      ctx.fillRect(nodeLayout.x, nodeLayout.y, nodeLayout.width, nodeLayout.height);
     } else if (node.type === 'text') {
-      ctx.fillStyle = '#fafafa'
-      ctx.fillRect(nodeLayout.x, nodeLayout.y, nodeLayout.width, nodeLayout.height)
-      ctx.strokeStyle = '#000'
+      ctx.fillStyle = '#fafafa';
+      ctx.fillRect(nodeLayout.x, nodeLayout.y, nodeLayout.width, nodeLayout.height);
+      ctx.strokeStyle = '#000';
 
-      const textLayout = getTextLayout(node.text, nodeLayout.width)
-      for (let i = 0; i < textLayout.lines.length; i ++) {
-        const line = textLayout.lines[i]
-        ctx.strokeText(line, nodeLayout.x, nodeLayout.y + textLayout.lineHeight * (i + 0.8))
+      const textLayout = getTextLayout(node.text, nodeLayout.width);
+      for (let i = 0; i < textLayout.lines.length; i++) {
+        const line = textLayout.lines[i];
+        ctx.strokeText(line, nodeLayout.x, nodeLayout.y + textLayout.lineHeight * (i + 0.8));
       }
     } else {
-      throw Error()
+      throw Error();
     }
 
     if (node.type === 'frame' && node.children.length > 0) {
-      ctx.save()
-      ctx.transform(1, 0, 0, 1, nodeLayout.x, nodeLayout.y)
+      ctx.save();
+      ctx.transform(1, 0, 0, 1, nodeLayout.x, nodeLayout.y);
       for (const child of node.children) {
-        renderSubtree(child)
+        renderSubtree(child);
       }
-      ctx.restore()
+      ctx.restore();
     }
-  }
+  };
 
-  renderSubtree(root)
+  renderSubtree(root);
 }
 
 const scene1: SceneNode = {
