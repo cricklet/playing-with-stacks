@@ -58,6 +58,28 @@ export interface FinalLayout {
   }
 }
 
+export const initialWidth = (node: SceneNode) => {
+  switch (node.type) {
+    case 'rectangle':
+      return node.width;
+    case 'text':
+      return node.fixedWidth ? node.fixedWidth : undefined;
+    case 'frame':
+      return node.fixedWidth ? node.fixedWidth : undefined;
+  }
+}
+
+export const initialHeight = (node: SceneNode) => {
+  switch (node.type) {
+    case 'rectangle':
+      return node.height;
+    case 'text':
+      return undefined;
+    case 'frame':
+      return node.fixedHeight ? node.fixedHeight : undefined;
+  }
+}
+
 export const getTextLayout = (text: string, maxWidth?: number): { lines: string[], lineHeight: number, width: number, height: number } => {
   const el = document.getElementById("hidden") as HTMLCanvasElement
   const ctx = el.getContext("2d") as CanvasRenderingContext2D
@@ -68,7 +90,7 @@ export const getTextLayout = (text: string, maxWidth?: number): { lines: string[
   }
 
   const words = text.split(" ");
-  const lines = [];
+  const lines: string[] = [];
   let currentLine = words[0];
 
   for (let i = 1; i < words.length; i++) {
@@ -87,12 +109,12 @@ export const getTextLayout = (text: string, maxWidth?: number): { lines: string[
 }
 
 export const computeMeasurementForTextHelper = (
-  text: string, width: number | 'auto' | 'fill'
+  text: string, width: number | 'auto' | undefined
 ): {
   width: number,
   height: number,
 } => {
-  if (width === 'fill') {
+  if (width === undefined) {
     return {
       // These are arbitrary fake measurements for when we don't know the
       // fill size of the text yet.
@@ -116,18 +138,9 @@ export const computeMeasurementsForText = (
   const maxWidth =
     (node.fixedWidth != null) ? node.fixedWidth :
     (forceWidth != null) ? forceWidth :
-    (horizontalAlignment === 'FILL') ? 'fill' : 'auto'
+    (horizontalAlignment === 'FILL') ? undefined : 'auto'
 
   return computeMeasurementForTextHelper(node.text, maxWidth)
-}
-
-export const computeMeasurementsForRectangle = (
-  node: RectangleNode,
-): { width: number, height: number } => {
-  return {
-    width: node.width,
-    height: node.height
-  }
 }
 
 export const computeMeasurementsForFrame = (
@@ -135,32 +148,32 @@ export const computeMeasurementsForFrame = (
   sizeOfFrameChild: (child: SceneNode) => { width: number, height: number, },
 ): { width: number, height: number } => {
   // We need to calculate the size of frames by measuring children.
-  let idealWidth = 0
-  let idealHeight = 0
+  let widthFromChildren = 0
+  let heightFromChildren = 0
 
   for (const child of node.children) {
     if (node.alignment.type === 'HORIZONTAL') {
-      idealWidth += sizeOfFrameChild(child).width
-      idealHeight = Math.max(idealHeight, sizeOfFrameChild(child).height)
+      widthFromChildren += sizeOfFrameChild(child).width
+      heightFromChildren = Math.max(heightFromChildren, sizeOfFrameChild(child).height)
     } else {
-      idealWidth = Math.max(idealWidth, sizeOfFrameChild(child).width)
-      idealHeight += sizeOfFrameChild(child).height
+      widthFromChildren = Math.max(widthFromChildren, sizeOfFrameChild(child).width)
+      heightFromChildren += sizeOfFrameChild(child).height
     }
   }
 
-  idealWidth += node.padding * 2
-  idealHeight += node.padding * 2
+  widthFromChildren += node.padding * 2
+  heightFromChildren += node.padding * 2
 
   if (node.children.length) {
     if (node.alignment.type === 'HORIZONTAL') {
-      idealWidth += (node.children.length - 1) * node.spacing
+      widthFromChildren += (node.children.length - 1) * node.spacing
     } else {
-      idealHeight += (node.children.length - 1) * node.spacing
+      heightFromChildren += (node.children.length - 1) * node.spacing
     }
   }
 
   return {
-    width: node.fixedWidth != null ? node.fixedWidth : idealWidth,
-    height: node.fixedHeight != null ? node.fixedHeight : idealHeight
+    width: node.fixedWidth != null ? node.fixedWidth : widthFromChildren,
+    height: node.fixedHeight != null ? node.fixedHeight : heightFromChildren
   }
 }

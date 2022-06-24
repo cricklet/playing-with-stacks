@@ -48,35 +48,63 @@ const render = (root: SceneNode, sceneLayout: FinalLayout, ctx: CanvasRenderingC
   renderSubtree(root)
 }
 
-// const scene: SceneNode = {
-//   type: 'frame',
-//   id: newGUID(),
-//   padding: 4,
-//   spacing: 4,
-//   color: randomColor(),
-//   alignment: {
-//     type: 'VERTICAL',
-//     horizontalAlignment: 'FILL',
-//     verticalAlignment: 'MIN'
-//   },
+const scene1: SceneNode = {
+  type: 'frame',
+  id: newGUID(),
+  padding: 4,
+  spacing: 4,
+  color: randomColor(),
+  alignment: {
+    type: 'VERTICAL',
+    horizontalAlignment: 'FILL',
+    verticalAlignment: 'MIN'
+  },
 
-//   children: [
-//     {
-//       type: 'text',
-//       id: newGUID(),
-//       text: 'blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah'
-//     },
-//     {
-//       type: 'rectangle',
-//       id: newGUID(),
-//       width: 100,
-//       height: 80,
-//       color: randomColor(),
-//     },
-//   ]
-// }
+  children: [
+    {
+      type: 'rectangle',
+      id: newGUID(),
+      width: 100,
+      height: 80,
+      color: randomColor(),
+    },
+    {
+      type: 'text',
+      id: newGUID(),
+      text: `XXX hello! this is some text. yes! blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah`,
+    },
+  ]
+}
 
-const scene: SceneNode = {
+const scene2: SceneNode = {
+  type: 'frame',
+  id: newGUID(),
+  padding: 4,
+  spacing: 4,
+  color: randomColor(),
+  alignment: {
+    type: 'VERTICAL',
+    horizontalAlignment: 'FILL',
+    verticalAlignment: 'MIN'
+  },
+
+  children: [
+    {
+      type: 'text',
+      id: newGUID(),
+      text: 'blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah'
+    },
+    {
+      type: 'rectangle',
+      id: newGUID(),
+      width: 100,
+      height: 80,
+      color: randomColor(),
+    },
+  ]
+}
+
+const scene3: SceneNode = {
   type: 'frame',
   id: newGUID(),
   padding: 4,
@@ -239,36 +267,112 @@ const scene: SceneNode = {
   ]
 }
 
-{
+
+const scene4: SceneNode = {
+  type: 'frame',
+  id: newGUID(),
+  padding: 4,
+  spacing: 4,
+  color: randomColor(),
+  alignment: {
+    type: 'HORIZONTAL',
+    horizontalAlignment: 'MIN',
+    verticalAlignment: 'FILL'
+  },
+  fixedWidth: 200,
+
+  children: [
+    {
+      type: 'rectangle',
+      id: newGUID(),
+      width: 50,
+      height: 80,
+      color: randomColor(),
+    },
+    {
+      type: 'text',
+      id: newGUID(),
+      fixedWidth: 50,
+      text: 'blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah'
+    },
+  ]
+}
+
+const scene5: SceneNode = {
+  type: 'frame',
+  id: newGUID(),
+  padding: 4,
+  spacing: 4,
+  color: randomColor(),
+  alignment: {
+    type: 'HORIZONTAL',
+    horizontalAlignment: 'MIN',
+    verticalAlignment: 'FILL'
+  },
+  fixedWidth: 200,
+
+  children: [
+    {
+      type: 'frame',
+      id: newGUID(),
+      padding: 4,
+      spacing: 4,
+      color: randomColor(),
+      alignment: {
+        type: 'VERTICAL',
+        horizontalAlignment: 'FILL',
+        verticalAlignment: 'MIN'
+      },
+      fixedWidth: 200,
+
+      children: [
+        // {
+        //   type: 'text',
+        //   id: newGUID(),
+        //   fixedWidth: 50,
+        //   text: 'blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah'
+        // },
+      ]
+    },
+    {
+      type: 'rectangle',
+      id: newGUID(),
+      width: 50,
+      height: 80,
+      color: randomColor(),
+    },
+  ]
+}
+
+const canvasesEl = document.getElementById("canvases")
+
+function renderScene(scene: SceneNode, sceneLayout: FinalLayout) {
   // render via measure / arrange pass
-  const el = document.getElementById("canvas1") as HTMLCanvasElement
+  var el = document.createElement('canvas');
+  el.width = 300;
+  el.height = 500;
+  canvasesEl?.appendChild(el)
 
   // draw the background
   const ctx = el.getContext("2d") as CanvasRenderingContext2D
   ctx.fillStyle = "#eee"
   ctx.fillRect(0, 0, el.width, el.height)
 
-  const sceneLayout = computeLayoutViaMeasureArrange(scene)
-
   // render the scene!
   render(scene, sceneLayout, ctx)
-
-  console.log(ctx)
 }
 
-{
-  // render via layout / layout pass
-  const el = document.getElementById("canvas2") as HTMLCanvasElement
+// renderScene(scene1, computeLayoutViaMeasureArrange(scene1))
+// renderScene(scene1, computeLayoutViaLayoutLayout(scene1))
 
-  // draw the background
-  const ctx = el.getContext("2d") as CanvasRenderingContext2D
-  ctx.fillStyle = "#eee"
-  ctx.fillRect(0, 0, el.width, el.height)
+// renderScene(scene2, computeLayoutViaMeasureArrange(scene2))
+// renderScene(scene2, computeLayoutViaLayoutLayout(scene2))
 
-  const sceneLayout = computeLayoutViaLayoutLayout(scene)
+// renderScene(scene3, computeLayoutViaMeasureArrange(scene3))
+// renderScene(scene3, computeLayoutViaLayoutLayout(scene3))
 
-  // render the scene!
-  render(scene, sceneLayout, ctx)
+// renderScene(scene4, computeLayoutViaMeasureArrange(scene4))
+// renderScene(scene4, computeLayoutViaLayoutLayout(scene4))
 
-  console.log(ctx)
-}
+renderScene(scene5, computeLayoutViaMeasureArrange(scene5))
+renderScene(scene5, computeLayoutViaLayoutLayout(scene5))

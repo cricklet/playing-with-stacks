@@ -1,4 +1,4 @@
-import { computeMeasurementsForFrame, computeMeasurementsForRectangle, computeMeasurementsForText, FinalLayout, FrameNode, SceneNode } from "./scene"
+import { computeMeasurementsForFrame, computeMeasurementsForText, FinalLayout, FrameNode, SceneNode } from "./scene"
 
 interface Layout {
   [id: string]: NodeLayout
@@ -61,7 +61,7 @@ export const computeLayoutViaMeasureArrange = (root: SceneNode): FinalLayout => 
       return
     }
     
-    let newMeasurements = undefined
+    let newMeasurements: { width: number, height: number } | undefined = undefined
     switch (node.type) {
       case 'frame':
         newMeasurements = computeMeasurementsForFrame(
@@ -69,7 +69,7 @@ export const computeLayoutViaMeasureArrange = (root: SceneNode): FinalLayout => 
           (child) => getLayout(child).firstPass as FirstPassLayout)
         break
       case 'rectangle':
-        newMeasurements = computeMeasurementsForRectangle(node)
+        newMeasurements = { width: node.width, height: node.height }
         break
       case 'text':
         newMeasurements = computeMeasurementsForText(
@@ -147,6 +147,10 @@ export const computeLayoutViaMeasureArrange = (root: SceneNode): FinalLayout => 
     if (isDirty && !rootSecondLayout.isDirty) {
       rootSecondLayout.isDirty = isDirty
     }
+  }
+
+  if (root.type === 'frame') {
+
   }
 
   // In this bottom-up pass, we use the sizes of each container's children to determine a size for

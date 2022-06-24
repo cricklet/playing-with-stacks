@@ -1,70 +1,170 @@
-import { computeMeasurementsForFrame, computeMeasurementsForRectangle, computeMeasurementsForText, FinalLayout, FrameNode, SceneNode } from "./scene"
+import { computeMeasurementForTextHelper, FinalLayout, FrameNode, initialHeight, initialWidth, SceneNode } from "./scene"
 
 enum PerformLayout {
   NO,
   YES
 }
 
-interface SizingResult {
-  width: number,
-  height: number,
+interface Size {
+  width?: number,
+  height?: number,
 }
 
-export const computeLayoutViaLayoutLayout = (root: SceneNode): FinalLayout => {
-  const widthsForTextNeedingReflow: { [id: string]: number } = {}
+interface Point {
+  x?: number,
+  y?: number
+}
+
+type SizeCache = {[id: string]: Size}
+
+// interface Layout {
+//   id: string,
+//   size: Size,
+//   location: Point,
+//   children: Layout[]
+// }
+// interface ComputeResult {
+//   size: Size,
+//   children: Layout[]
+// }
+
+const computeMeasurementsForFrame = (
+  node: FrameNode,
+  parent: FrameNode | undefined
+  sizeOfFrameChild: (child: SceneNode) => { width: number, height: number, },
+): { width: number, height: number } => {
+  let idealWidth: number = undefined
+  let idealHeight: number = undefined
+  if (parent?.alignment.horizontalAlignment === 'FILL' && idealSizeFromParent.width) {
+    idealWidth = idealSizeFromParent.width
+  }
+  if (parent?.alignment.verticalAlignment === 'FILL' && idealSizeFromParent.height) {
+    idealHeight = idealSizeFromParent.height
+  }
+
+  // We need to calculate the size of frames by measuring children.
+  let widthFromChildren = 0
+  let heightFromChildren = 0
+
+  for (const child of node.children) {
+    if (node.alignment.type === 'HORIZONTAL') {
+      widthFromChildren += sizeOfFrameChild(child).width
+      heightFromChildren = Math.max(heightFromChildren, sizeOfFrameChild(child).height)
+    } else {
+      widthFromChildren = Math.max(widthFromChildren, sizeOfFrameChild(child).width)
+      heightFromChildren += sizeOfFrameChild(child).height
+    }
+  }
+
+  widthFromChildren += node.padding * 2
+  heightFromChildren += node.padding * 2
+
+  if (node.children.length) {
+    if (node.alignment.type === 'HORIZONTAL') {
+      widthFromChildren += (node.children.length - 1) * node.spacing
+    } else {
+      heightFromChildren += (node.children.length - 1) * node.spacing
+    }
+  }
+
+  return {
+    width: node.fixedWidth != null ? node.fixedWidth : widthFromChildren,
+    height: node.fixedHeight != null ? node.fixedHeight : heightFromChildren
+  }
+}
+
+const measure = (
+  root: SceneNode,
+  measureCache: SizeCache
+): SizeCache => {
+  
+  const measureHelper = (node: SceneNode, parent: FrameNode | undefined, idealSizeFromParent: Size): Size => {
+    function cacheResult(size: Size) {
+      measureCache[node.id] = size
+      return size
+    }
+
+    switch (node.type) {
+      case 'rectangle': {
+        let idealWidth: number | undefined = node.width
+        let idealHeight: number | undefined = node.height
+        if (parent?.alignment.horizontalAlignment === 'FILL' && idealSizeFromParent.width) {
+          idealWidth = idealSizeFromParent.width
+        }
+        if (parent?.alignment.verticalAlignment === 'FILL' && idealSizeFromParent.height) {
+          idealHeight = idealSizeFromParent.height
+        }
+
+        return cacheResult({ width: idealWidth, height: idealHeight }) // trivial
+      }
+      case 'text': {
+        let idealWidth: number | 'auto' | undefined = undefined
+        if (node.fixedWidth) idealWidth = node.fixedWidth
+        else if (parent?.alignment.horizontalAlignment === 'FILL') {
+          if (idealSizeFromParent.width) idealWidth = idealSizeFromParent.width
+          else idealWidth = undefined
+        } else {
+          idealWidth = 'auto'
+        }
+  
+        return cacheResult(computeMeasurementForTextHelper(node.text, idealWidth))
+      }
+      case 'frame': {
+        let idealChildWidth: number | undefined = undefined
+        let idealChildHeight: number | undefined = undefined
+  
+        if (node.fixedWidth) {
+          idealChildWidth = node.fixedWidth - node.padding * 2;
+        } else if (node?.alignment.horizontalAlignment === 'FILL' && idealSizeFromParent.width) {
+          idealChildWidth = idealSizeFromParent.width - node.padding * 2;
+        }
+
+        if (node.fixedHeight) {
+          idealChildHeight = node.fixedHeight - node.padding * 2;
+        } else if (node?.alignment.verticalAlignment === 'FILL' && idealSizeFromParent.height) {
+          idealChildHeight = idealSizeFromParent.height - node.padding * 2;
+        }
+
+        console.log(parent?.alignment.horizontalAlignment, idealSizeFromParent, idealChildWidth)
+
+        return cacheResult(computeMeasurementsForFrame(node,
+          (child: SceneNode) => {
+            const {width, height} = measureHelper(child, node, { width: idealChildWidth, height: idealChildHeight})
+            return {
+              width: width || 0,
+              height: height || 0
+            }
+          }))
+      }
+    }
+  }
+
+  measureHelper(root, undefined, measureCache[root.id] || {width: undefined, height: undefined})
+  return measureCache
+}
+
+const layout = (
+  root: SceneNode,
+  measureCache: SizeCache
+): FinalLayout => {
   const finalLayout: FinalLayout = {}
 
-  let sizingCache = {}
-
-  const layout = (node: SceneNode, parent: FrameNode | undefined, performLayout: PerformLayout): SizingResult => {
-    if (node.id in sizingCache && performLayout === PerformLayout.NO) {
-      return sizingCache[node.id]
-    }
-
-    let nodeSize
-    switch (node.type) {
-      case 'rectangle':
-        nodeSize = computeMeasurementsForRectangle(node)
-        break
-      case 'text':
-        const fixedWidthForReflow = widthsForTextNeedingReflow[node.id]
-        nodeSize = computeMeasurementsForText(node,
-          parent ? parent.alignment.horizontalAlignment : undefined,
-          fixedWidthForReflow != null ? fixedWidthForReflow : undefined)
-        break
-      case 'frame':
-        // During the first layout method call, we run this recursively to compute measurements (eg similar
-        // to the measure pass of the measure/arrange algorithm). During the second layout method call, we
-        // don't run this call because the sizing should been cached already.
-        nodeSize = computeMeasurementsForFrame(node, (child: SceneNode) => layout(child, node, PerformLayout.NO))
-        break
-    }
-
-    if (performLayout == PerformLayout.NO) {
-      sizingCache[node.id] = nodeSize
-      return nodeSize
-    }
-
+  const traverse = (node: SceneNode) => {
     if (node.type === 'frame') {
       let x = node.padding
       let y = node.padding
 
       for (const child of node.children) {
-        // Perform layout on grandchildren and get current child size
-        const childSizing = layout(child, node, PerformLayout.YES)
-        const needsTextReflow = child.type === 'text' && node.alignment.horizontalAlignment === 'FILL'
+        const childSizing = measureCache[child.id]
 
-        const finalWidth = node.alignment.horizontalAlignment === 'FILL' ? nodeSize.width - node.padding * 2 : childSizing.width
-        const finalHeight = node.alignment.verticalAlignment === 'FILL' ? nodeSize.height - node.padding * 2 : childSizing.height
+        if (childSizing.width == null || childSizing.height == null) {
+          throw new Error('need to measure everything first')
+        }
 
         finalLayout[child.id] = {
           x, y,
-          width: finalWidth,
-          height: finalHeight,
-        }
-
-        if (needsTextReflow) {
-          widthsForTextNeedingReflow[child.id] = finalWidth
+          width: childSizing.width,
+          height: childSizing.height,
         }
 
         if (node.alignment.type === 'HORIZONTAL') {
@@ -72,32 +172,35 @@ export const computeLayoutViaLayoutLayout = (root: SceneNode): FinalLayout => {
         } else {
           y += childSizing.height + node.spacing
         }
+
+        traverse(child)
       }
     }
-
-    return nodeSize
   }
 
-  // Our first layout call serves the same purpose as a measurement pass in the measure/arrange
-  // algorithm. Here, we figure out the sizes of all containers based on the sizes of their children.
-  layout(root, undefined, PerformLayout.NO)
 
-  // Our second layout call finalizes the layout (arrangement / resizing). It re-uses the cached
-  // sizing that we calculated in that first layout call.
-  let rootSize = layout(root, undefined, PerformLayout.YES)
-
-  if (widthsForTextNeedingReflow) {
-    // TODO: we clear the sizing cache so that all sizes dependent on reflowed text will be
-    // recomputed. We could be smarter and figure out which sizes need to be cleared and only
-    // clear those.
-    sizingCache = {}
-    layout(root, undefined, PerformLayout.NO)
-    rootSize = layout(root, undefined, PerformLayout.YES)
+  const { width, height } = measureCache[root.id]
+  if (width == null || height == null) {
+    throw new Error('need to measure everything first')
   }
 
   finalLayout[root.id] = {
-    x: 0, y: 0, ... rootSize
+    x: 0, y: 0,
+    width, height
   }
 
+  traverse(root)
+
   return finalLayout
+}
+
+export const computeLayoutViaLayoutLayout = (
+  root: SceneNode
+): FinalLayout => {
+  const measureCache: SizeCache = {}
+  const firstPass = measure(root, measureCache)
+  const secondPass = measure(root, measureCache)
+
+  // Copy the results into finalLayout
+  return layout(root, secondPass)
 }
