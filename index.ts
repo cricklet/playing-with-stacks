@@ -1,6 +1,5 @@
-import { computeLayoutViaLayoutLayout } from "./layout-layout";
-import { computeLayoutViaMeasureArrange } from "./measure-arrange";
 import { SceneNode, getTextLayout, FinalLayout, newGUID } from "./scene";
+import { computeLayoutViaImmediate, computeLayoutViaMeasureArrange, computeLayoutViaRecursive } from "./layout";
 
 const randomColor = (): string => {
   var letters = '0123456789ABCDEF';
@@ -14,7 +13,7 @@ const randomColor = (): string => {
 function render(root: SceneNode, sceneLayout: FinalLayout, ctx: CanvasRenderingContext2D) {
   const renderSubtree = (node: SceneNode) => {
     const nodeLayout = sceneLayout[node.id];
-    if (nodeLayout == null) {
+    if (nodeLayout == null || nodeLayout.width == null || nodeLayout.height == null) {
       console.error('no layout found for', node.id)
       return
     }
@@ -58,11 +57,10 @@ const scene1: SceneNode = {
   padding: 4,
   spacing: 4,
   color: randomColor(),
-  alignment: {
-    type: 'VERTICAL',
-    horizontalAlignment: 'FILL',
-    verticalAlignment: 'MIN'
-  },
+
+  width: 'resize-to-fit',
+  height: 'resize-to-fit',
+  alignment: 'vertical',
 
   children: [
     {
@@ -73,9 +71,11 @@ const scene1: SceneNode = {
       color: randomColor(),
     },
     {
-      type: 'text',
+      type: 'rectangle',
       id: newGUID(),
-      text: `XXX hello! this is some text. yes! blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah`,
+      width: 100,
+      height: 80,
+      color: randomColor(),
     },
   ]
 }
@@ -86,24 +86,25 @@ const scene2: SceneNode = {
   padding: 4,
   spacing: 4,
   color: randomColor(),
-  alignment: {
-    type: 'VERTICAL',
-    horizontalAlignment: 'FILL',
-    verticalAlignment: 'MIN'
-  },
+
+  width: 'resize-to-fit',
+  height: 'resize-to-fit',
+  alignment: 'vertical',
 
   children: [
-    {
-      type: 'text',
-      id: newGUID(),
-      text: 'blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah'
-    },
     {
       type: 'rectangle',
       id: newGUID(),
       width: 100,
       height: 80,
       color: randomColor(),
+    },
+    {
+      type: 'text',
+      id: newGUID(),
+      text: `XXX hello! this is some text. yes! blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah`,
+      width: 'grow',
+      height: 'resize-to-fit'
     },
   ]
 }
@@ -112,237 +113,38 @@ const scene3: SceneNode = {
   type: 'frame',
   id: newGUID(),
   padding: 4,
-  spacing: 4,
   color: randomColor(),
-  alignment: {
-    type: 'VERTICAL',
-    horizontalAlignment: 'MIN',
-    verticalAlignment: 'MIN'
-  },
 
-  children: [
-    {
-      type: 'text',
-      id: newGUID(),
-      text: `XXX hello! this is some text. yes! blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah`,
-      fixedWidth: 200,
-    },
-    {
-      type: 'rectangle',
-      id: newGUID(),
-      width: 100,
-      height: 80,
-      color: randomColor(),
-    },
-    {
-      type: 'frame',
-      id: newGUID(),
-      padding: 4,
-      spacing: 4,
-      color: randomColor(),
-      alignment: {
-        type: 'HORIZONTAL',
-        horizontalAlignment: 'MIN',
-        verticalAlignment: 'FILL'
-      },
-    
-      children: [
-        {
-          type: 'frame',
-          id: newGUID(),
-          padding: 4,
-          spacing: 4,
-          color: randomColor(),
-          alignment: {
-            type: 'VERTICAL',
-            horizontalAlignment: 'MIN',
-            verticalAlignment: 'MIN'
-          },
-          children: [
-            {
-              type: 'rectangle',
-              id: newGUID(),
-              width: 40,
-              height: 30,
-              color: randomColor(),
-            },
-            {
-              type: 'rectangle',
-              id: newGUID(),
-              width: 20,
-              height: 30,
-              color: randomColor(),
-            },
-            {
-              type: 'rectangle',
-              id: newGUID(),
-              width: 50,
-              height: 30,
-              color: randomColor(),
-            },
-            {
-              type: 'rectangle',
-              id: newGUID(),
-              width: 20,
-              height: 10,
-              color: randomColor(),
-            },
-          ]
-        },
-        {
-          type: 'frame',
-          id: newGUID(),
-          padding: 4,
-          spacing: 4,
-          color: randomColor(),
-          alignment: {
-            type: 'VERTICAL',
-            horizontalAlignment: 'FILL',
-            verticalAlignment: 'MIN'
-          },
-        
-          children: [
-            {
-              type: 'rectangle',
-              id: newGUID(),
-              width: 100,
-              height: 80,
-              color: randomColor(),
-            },
-            {
-              type: 'text',
-              id: newGUID(),
-              text: `XXX hello! this is some text. yes! blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah`,
-            },
-          ]
-        },
-        {
-          type: 'frame',
-          id: newGUID(),
-          padding: 4,
-          spacing: 4,
-          color: randomColor(),
-          alignment: {
-            type: 'VERTICAL',
-            horizontalAlignment: 'FILL',
-            verticalAlignment: 'MIN'
-          },
-        
-          children: [
-            {
-              type: 'rectangle',
-              id: newGUID(),
-              width: 40,
-              height: 20,
-              color: randomColor(),
-            },
-            {
-              type: 'rectangle',
-              id: newGUID(),
-              width: 60,
-              height: 30,
-              color: randomColor(),
-            },
-            {
-              type: 'rectangle',
-              id: newGUID(),
-              width: 20,
-              height: 10,
-              color: randomColor(),
-            }
-          ]
-        }
-      ]
-    },
-    {
-      type: 'rectangle',
-      id: newGUID(),
-      width: 100,
-      height: 80,
-      color: randomColor(),
-    },
-    {
-      type: 'rectangle',
-      id: newGUID(),
-      width: 100,
-      height: 80,
-      color: randomColor(),
-    }
-  ]
-}
-
-
-const scene4: SceneNode = {
-  type: 'frame',
-  id: newGUID(),
-  padding: 4,
-  spacing: 4,
-  color: randomColor(),
-  alignment: {
-    type: 'HORIZONTAL',
-    horizontalAlignment: 'MIN',
-    verticalAlignment: 'FILL'
-  },
-  fixedWidth: 200,
-
-  children: [
-    {
-      type: 'rectangle',
-      id: newGUID(),
-      width: 50,
-      height: 80,
-      color: randomColor(),
-    },
-    {
-      type: 'text',
-      id: newGUID(),
-      fixedWidth: 50,
-      text: 'blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah'
-    },
-  ]
-}
-
-const scene5: SceneNode = {
-  type: 'frame',
-  id: newGUID(),
-  padding: 4,
-  spacing: 4,
-  color: randomColor(),
-  alignment: {
-    type: 'HORIZONTAL',
-    horizontalAlignment: 'MIN',
-    verticalAlignment: 'FILL'
-  },
-  fixedWidth: 200,
+  width: 'resize-to-fit',
+  height: 'resize-to-fit',
+  alignment: 'horizontal',
 
   children: [
     {
       type: 'frame',
       id: newGUID(),
       padding: 4,
-      spacing: 4,
       color: randomColor(),
-      alignment: {
-        type: 'VERTICAL',
-        horizontalAlignment: 'FILL',
-        verticalAlignment: 'MIN'
-      },
-      fixedWidth: 200,
+
+      width: 100,
+      height: 'resize-to-fit',
+      alignment: 'horizontal',
 
       children: [
-        // {
-        //   type: 'text',
-        //   id: newGUID(),
-        //   fixedWidth: 50,
-        //   text: 'blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah'
-        // },
+        {
+          type: 'text',
+          id: newGUID(),
+          text: `XXX hello! this is some text. yes! blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah`,
+          width: 'grow',
+          height: 'resize-to-fit'
+        },
       ]
     },
     {
       type: 'rectangle',
       id: newGUID(),
-      width: 50,
-      height: 80,
+      width: 100,
+      height: 'grow',
       color: randomColor(),
     },
   ]
@@ -378,5 +180,16 @@ function renderScene(scene: SceneNode, sceneLayout: FinalLayout) {
 // renderScene(scene4, computeLayoutViaMeasureArrange(scene4))
 // renderScene(scene4, computeLayoutViaLayoutLayout(scene4))
 
-renderScene(scene5, computeLayoutViaMeasureArrange(scene5))
-renderScene(scene5, computeLayoutViaLayoutLayout(scene5))
+// renderScene(scene1, computeLayoutViaMeasureArrange(scene1))
+// renderScene(scene1, computeLayoutViaRecursive(scene1))
+// renderScene(scene1, computeLayoutViaImmediate(scene1))
+
+renderScene(scene2, computeLayoutViaMeasureArrange(scene2))
+renderScene(scene2, computeLayoutViaRecursive(scene2))
+renderScene(scene2, computeLayoutViaImmediate(scene2))
+
+canvasesEl?.appendChild(document.createElement('div'))
+
+renderScene(scene3, computeLayoutViaMeasureArrange(scene3))
+renderScene(scene3, computeLayoutViaRecursive(scene3))
+renderScene(scene3, computeLayoutViaImmediate(scene3))

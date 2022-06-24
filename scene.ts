@@ -4,30 +4,19 @@ export const newGUID = (): string => {
   return `${nextGUID ++}`
 }
 
-export interface HorizontalAlign {
-  type: 'HORIZONTAL'
-  horizontalAlignment: 'MIN'
-  verticalAlignment: 'MIN' | 'FILL'
-}
-
-export interface VerticalAlign {
-  type: 'VERTICAL'
-  verticalAlignment: 'MIN'
-  horizontalAlignment: 'MIN' | 'FILL'
-}
+type SizeSetting = 'grow' | 'resize-to-fit' | number
 
 export interface FrameNode {
   type: 'frame'
   id: string
 
   padding: number
-  spacing: number
   color: string
 
-  alignment: HorizontalAlign | VerticalAlign
+  alignment: 'horizontal' | 'vertical' // eg 'wrap'
 
-  fixedWidth?: number
-  fixedHeight?: number
+  width: SizeSetting
+  height: SizeSetting
 
   children: SceneNode[]
 }
@@ -35,16 +24,21 @@ export interface FrameNode {
 export interface RectangleNode {
   type: 'rectangle'
   id: string
-  width: number
-  height: number
+
+  width: Exclude<SizeSetting, 'resize-to-fit'>
+  height: Exclude<SizeSetting, 'resize-to-fit'>
+
   color: string
 }
 
 export interface TextNode {
   type: 'text'
   id: string
+
   text: string
-  fixedWidth?: number
+
+  width: SizeSetting
+  height: SizeSetting
 }
 
 export type SceneNode = RectangleNode | FrameNode | TextNode
@@ -53,30 +47,8 @@ export interface FinalLayout {
   [id: string]: {
     x: number,
     y: number,
-    width: number,
-    height: number
-  }
-}
-
-export function initialWidth(node: SceneNode) {
-  switch (node.type) {
-    case 'rectangle':
-      return node.width
-    case 'text':
-      return node.fixedWidth ? node.fixedWidth : undefined
-    case 'frame':
-      return node.fixedWidth ? node.fixedWidth : undefined
-  }
-}
-
-export function initialHeight(node: SceneNode) {
-  switch (node.type) {
-    case 'rectangle':
-      return node.height
-    case 'text':
-      return undefined
-    case 'frame':
-      return node.fixedHeight ? node.fixedHeight : undefined
+    width: number | undefined,
+    height: number | undefined
   }
 }
 
