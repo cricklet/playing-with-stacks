@@ -273,8 +273,8 @@ export function computeLayoutViaRecursive(root: SceneNode): FinalLayout {
 
     console.warn('computing container measurements', node.id, 'of type', node.type, 'with given size: ', givenWidth, ',', givenHeight)
 
-    const giveWidth = typeof node.width === 'number' ? node.width - node.padding * 2 : givenWidth ? givenWidth - node.padding * 2 : undefined
-    const giveHeight = typeof node.height === 'number' ? node.height - node.padding * 2 : givenHeight ? givenHeight - node.padding * 2 : undefined
+    let availableWidth = typeof node.width === 'number' ? node.width - node.padding * 2 : givenWidth ? givenWidth - node.padding * 2 : undefined
+    let availableHeight = typeof node.height === 'number' ? node.height - node.padding * 2 : givenHeight ? givenHeight - node.padding * 2 : undefined
 
     let containerWidth: OptionalNumber = 0
     let containerHeight: OptionalNumber = 0
@@ -285,22 +285,67 @@ export function computeLayoutViaRecursive(root: SceneNode): FinalLayout {
     const horizontalAlign = node.alignment === 'horizontal'
     const verticalAlign = node.alignment === 'vertical'
 
+    let measuredChildren = 0
+
     for (const child of node.children) {
-      // if (node.id === 'test-frame') debugger
+      if (horizontalAlign) {
+        if (child.width !== 'grow') {
+          // We can know the width of the child. We will know the height if availableHeight is valid (or if it is trivial)
+          let [childWidth, childHeight] = computeInternal(child, undefined, availableHeight, performLayout)
+          if (childWidth == null && availableHeight) {
+            throw new Error('should know child width')
+          }
+          childrenWidth += childWidth ? childWidth : 0
+          childrenHeight = Math.max(childrenHeight, childHeight ? childHeight : 0)
+          measuredChildren ++
+        }
+      }
+      if (verticalAlign) {
+        if (child.height !== 'grow') {
+          // We can know the height of the child
+          let [childWidth, childHeight] = computeInternal(child, availableWidth, undefined, performLayout)
+          if (childHeight == null && availableWidth) {
+            throw new Error('should know child height')
+          }
+          childrenWidth = Math.max(childrenWidth, childWidth ? childWidth : 0)
+          childrenHeight += childHeight ? childHeight : 0
+          measuredChildren ++
+        }
+      }
+    }
 
-      let [childWidth, childHeight] = computeInternal(child, giveWidth, giveHeight, performLayout)
+    availableWidth = availableWidth && horizontalAlign ? availableWidth - childrenWidth : availableWidth
+    availableHeight = availableHeight && verticalAlign ? availableHeight - childrenHeight : availableHeight
 
-      // make sure we have a value here
-      childWidth = childWidth != null ? childWidth : 0
-      childHeight = childHeight != null ? childHeight : 0
+    const percentToGrow = (node.children.length - measuredChildren) / node.children.length
 
-      childrenWidth = horizontalAlign ?
-        childrenWidth + childWidth :
-        Math.max(childrenWidth, childWidth)
+    for (const child of node.children) {
+      if (horizontalAlign) {
+        if (child.width === 'grow') {
+          const remainingWidth = availableWidth ? availableWidth * percentToGrow : undefined
+          let [childWidth, childHeight] = computeInternal(child, remainingWidth, availableHeight, performLayout)
 
-      childrenHeight = verticalAlign ?
-        childrenHeight + childHeight :
-        Math.max(childrenHeight, childHeight)
+          childrenWidth += childWidth ? childWidth : 0
+          childrenHeight = Math.max(childrenHeight, childHeight ? childHeight : 0)
+
+          if (node.width === 'resize-to-fit') {
+            throw new Error('grow inside resize-to-fit is disallowed')
+          }
+        }
+      }
+      if (verticalAlign) {
+        if (child.height === 'grow') {
+          const remainingHeight = availableHeight ? availableHeight * percentToGrow : undefined
+          let [childWidth, childHeight] = computeInternal(child, availableWidth, remainingHeight, performLayout)
+
+          childrenWidth = Math.max(childrenWidth, childWidth ? childWidth : 0)
+          childrenHeight += childHeight ? childHeight : 0
+
+          if (node.height === 'resize-to-fit') {
+            throw new Error('grow inside resize-to-fit is disallowed')
+          }
+        }
+      }
     }
 
     if (node.width === 'resize-to-fit') {
@@ -331,7 +376,7 @@ export function computeLayoutViaRecursive(root: SceneNode): FinalLayout {
     let y = node.padding
 
     for (const child of node.children) {
-      const [childWidth, childHeight] = computeInternal(child, giveWidth, giveHeight, performLayout)
+      const [childWidth, childHeight] = computeInternal(child, cache[child.id].givenWidth, cache[child.id].givenHeight, performLayout)
       if (childWidth == null || childHeight == null) {
         throw new Error('need full child measurements')
       }
@@ -346,6 +391,8 @@ export function computeLayoutViaRecursive(root: SceneNode): FinalLayout {
 
     return cacheResult(containerWidth, containerHeight)
   }
+
+  console.warn('first pass')
 
   const [firstPassWidth, firstPassHeight] = computeInternal(
     root,
