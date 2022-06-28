@@ -198,6 +198,10 @@ function numberOrUndefined(x: number | any): number | undefined {
 }
 
 function isEqual(x: number | undefined, y: number | undefined): boolean {
+  if (x == null || y == null) {
+    if (x === y) return true;
+    else return false;
+  }
   return Math.abs(x - y) < 0.001
 }
 
@@ -230,8 +234,6 @@ export function computeLayoutViaRecursive(root: SceneNode): FinalLayout {
     // parameters we computed layout with
     givenWidth: OptionalNumber,
     givenHeight: OptionalNumber,
-    parentWidth: OptionalNumber,
-    parentHeight: OptionalNumber,
 
     // resulting layout
     width: OptionalNumber,
@@ -240,54 +242,132 @@ export function computeLayoutViaRecursive(root: SceneNode): FinalLayout {
 
   function computeInternal(
     node: SceneNode, givenWidth: OptionalNumber, givenHeight: OptionalNumber,
-    parentWidth: OptionalNumber, parentHeight: OptionalNumber,
     performLayout: boolean
   ): [OptionalNumber, OptionalNumber] {
+    // Our parent computes givenWidth / givenHeight -- this is the space node can take
+    // up if it so chooses.
+    //
+    // Previously, there was a parentWidth and parentHeight parameter. We can ignore those
+    // because they're used to calculate css values like `50%`.
+
     const cachedResult = cache[node.id]
     if (cachedResult &&
       isEqual(cachedResult.givenWidth, givenWidth) &&
-      isEqual(cachedResult.givenHeight, givenHeight) &&
-      isEqual(cachedResult.parentWidth, parentWidth) &&
-      isEqual(cachedResult.parentHeight, parentHeight)
+      isEqual(cachedResult.givenHeight, givenHeight)
     ) {
       return [cachedResult.width, cachedResult.height]
     }
 
-    if (node.type === 'text' || node.type === 'rectangle') {
-      const [ width, height ] = measureLeaf(node, givenWidth, givenHeight)
+    function cacheResult(width: OptionalNumber, height: OptionalNumber): [OptionalNumber, OptionalNumber] {
       cache[node.id] = {
-        givenWidth, givenHeight, parentWidth, parentHeight, width, height
+        givenWidth, givenHeight, width, height
       }
       return [width, height]
     }
 
-    let containerWidth = 0
-    let containerHeight = 0
-    let innerWidth = 0
-    let innerHeight = 0
+    if (node.type === 'text' || node.type === 'rectangle') {
+      console.warn('measuring', node.id, 'of type', node.type, 'with given size: ', givenWidth, ',', givenHeight)
+      const [ width, height ] = measureLeaf(node, givenWidth, givenHeight)
+      return cacheResult(width, height)
+    }
+
+    console.warn('computing container measurements', node.id, 'of type', node.type, 'with given size: ', givenWidth, ',', givenHeight)
+
+    const giveWidth = typeof node.width === 'number' ? node.width - node.padding * 2 : givenWidth ? givenWidth - node.padding * 2 : undefined
+    const giveHeight = typeof node.height === 'number' ? node.height - node.padding * 2 : givenHeight ? givenHeight - node.padding * 2 : undefined
+
+    let containerWidth: OptionalNumber = 0
+    let containerHeight: OptionalNumber = 0
+
+    let childrenWidth = 0
+    let childrenHeight = 0
+
+    const horizontalAlign = node.alignment === 'horizontal'
+    const verticalAlign = node.alignment === 'vertical'
+
+    for (const child of node.children) {
+      // if (node.id === 'test-frame') debugger
+
+      let [childWidth, childHeight] = computeInternal(child, giveWidth, giveHeight, performLayout)
+
+      // make sure we have a value here
+      childWidth = childWidth != null ? childWidth : 0
+      childHeight = childHeight != null ? childHeight : 0
+
+      childrenWidth = horizontalAlign ?
+        childrenWidth + childWidth :
+        Math.max(childrenWidth, childWidth)
+
+      childrenHeight = verticalAlign ?
+        childrenHeight + childHeight :
+        Math.max(childrenHeight, childHeight)
+    }
+
+    if (node.width === 'resize-to-fit') {
+      containerWidth = childrenWidth + 2 * node.padding
+    } else if (node.width === 'grow') {
+      containerWidth = givenWidth
+    } else {
+      containerWidth = node.width
+    }
+
+    if (node.height === 'resize-to-fit') {
+      containerHeight = childrenHeight + 2 * node.padding
+    } else if (node.height === 'grow') {
+      containerHeight = givenHeight
+    } else {
+      containerHeight = node.height
+    }
+
+    if (!performLayout) {
+      return cacheResult(containerWidth, containerHeight)
+    }
+
+    if (containerWidth == null || containerHeight == null) {
+      throw new Error('need full measurement to run layout')
+    }
+
+    let x = node.padding
+    let y = node.padding
+
+    for (const child of node.children) {
+      const [childWidth, childHeight] = computeInternal(child, giveWidth, giveHeight, performLayout)
+      if (childWidth == null || childHeight == null) {
+        throw new Error('need full child measurements')
+      }
+
+      layout[child.id] = {
+        x, y, width: childWidth, height: childHeight
+      }
+
+      x += horizontalAlign ? childWidth : 0
+      y += verticalAlign ? childHeight : 0
+    }
+
+    return cacheResult(containerWidth, containerHeight)
   }
 
-  computeInternal(
+  const [firstPassWidth, firstPassHeight] = computeInternal(
     root,
     numberOrUndefined(root.width),
     numberOrUndefined(root.height),
-    undefined,
-    undefined,
     false)
 
-  computeInternal(
+  console.warn('second pass')
+
+  const [rootWidth, rootHeight] = computeInternal(
     root,
-    layout[root.id].width,
-    layout[root.id].height,
-    undefined,
-    undefined,
+    firstPassWidth,
+    firstPassHeight,
     true)
+
+  console.log(JSON.stringify(cache, null, 2))
+  console.log(JSON.stringify(root, null, 2))
+  console.log(JSON.stringify(layout, null, 2))
+  
+  layout[root.id] = {
+    x: 0, y: 0, width: rootWidth, height: rootHeight
+  }
   
   return layout
-}
-
-export function computeLayoutViaMeasureArrange(root: SceneNode): FinalLayout {
-  const finalLayout: FinalLayout = {}
-
-  return finalLayout
 }
