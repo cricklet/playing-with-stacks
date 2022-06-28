@@ -81,7 +81,7 @@ const scene1: SceneNode = {
 
 const scene2: SceneNode = {
   type: 'frame',
-  id: newGUID(),
+  id: 'frame',
   padding: 4,
   color: randomColor(),
 
@@ -92,14 +92,14 @@ const scene2: SceneNode = {
   children: [
     {
       type: 'rectangle',
-      id: newGUID(),
+      id: 'rect',
       width: 100,
       height: 80,
       color: randomColor(),
     },
     {
       type: 'text',
-      id: newGUID(),
+      id: 'text',
       text: `XXX hello! this is some text. yes! blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah`,
       width: 'grow',
       height: 'resize-to-fit'
@@ -156,10 +156,10 @@ const scene4: SceneNode = {
   alignment: 'vertical',
 
   children: [
-    {
-      type: 'text', id: newGUID(), width: 200, height: 'resize-to-fit',
-      text: 'test test test test test test test test test test test test test test test test test test test test'
-    },
+    // {
+    //   type: 'text', id: newGUID(), width: 200, height: 'resize-to-fit',
+    //   text: 'test test test test test test test test test test test test test test test test test test test test'
+    // },
     {
       type: 'rectangle', id: newGUID(), width: 120, height: 80, color: randomColor()
     },
@@ -218,7 +218,6 @@ const scene4: SceneNode = {
           alignment: 'vertical',
 
           children: [
-
           ]
         }
       ]
@@ -244,15 +243,15 @@ function renderScene(scene: SceneNode, sceneLayout: FinalLayout) {
   render(scene, sceneLayout, ctx)
 }
 
-renderScene(scene4, computeLayoutViaImmediate(scene4))
 renderScene(scene4, computeLayoutViaRecursive(scene4))
+renderScene(scene4, computeLayoutViaImmediate(scene4))
 
 // canvasesEl?.appendChild(document.createElement('div'))
 
-// renderScene(scene2, computeLayoutViaImmediate(scene2))
 // renderScene(scene2, computeLayoutViaRecursive(scene2))
+// renderScene(scene2, computeLayoutViaImmediate(scene2))
 
 // canvasesEl?.appendChild(document.createElement('div'))
 
-// renderScene(scene3, computeLayoutViaImmediate(scene3))
 // renderScene(scene3, computeLayoutViaRecursive(scene3))
+// renderScene(scene3, computeLayoutViaImmediate(scene3))
