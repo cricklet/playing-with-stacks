@@ -2,10 +2,10 @@ import { SceneNode, getTextLayout, FinalLayout, newGUID } from "./scene";
 import { computeLayoutViaImmediate, computeLayoutViaRecursive } from "./layout";
 
 const randomColor = (): string => {
-  var letters = '0123456789ABCDEF';
+  var letters = '789ABCDEF';
   var color = '#';
   for (var i = 0; i < 6; i++) {
-    color += letters[Math.floor(Math.random() * 16)];
+    color += letters[Math.floor(Math.random() * letters.length)];
   }
   return color;
 }
@@ -27,12 +27,12 @@ function render(root: SceneNode, sceneLayout: FinalLayout, ctx: CanvasRenderingC
     } else if (node.type === 'text') {
       ctx.fillStyle = '#fafafa';
       ctx.fillRect(nodeLayout.x, nodeLayout.y, nodeLayout.width, nodeLayout.height);
-      ctx.strokeStyle = '#000';
+      ctx.fillStyle = '#000';
 
       const textLayout = getTextLayout(node.text, nodeLayout.width);
       for (let i = 0; i < textLayout.lines.length; i++) {
         const line = textLayout.lines[i];
-        ctx.strokeText(line, nodeLayout.x, nodeLayout.y + textLayout.lineHeight * (i + 0.8));
+        ctx.fillText(line, nodeLayout.x, nodeLayout.y + textLayout.lineHeight * (i + 0.8));
       }
     } else {
       throw Error();
@@ -54,7 +54,7 @@ function render(root: SceneNode, sceneLayout: FinalLayout, ctx: CanvasRenderingC
 const scene1: SceneNode = {
   type: 'frame',
   id: newGUID(),
-  padding: 4,
+  padding: 8,
   color: randomColor(),
 
   width: 'resize-to-fit',
@@ -82,7 +82,7 @@ const scene1: SceneNode = {
 const scene2: SceneNode = {
   type: 'frame',
   id: 'frame',
-  padding: 4,
+  padding: 8,
   color: randomColor(),
 
   width: 'resize-to-fit',
@@ -110,7 +110,7 @@ const scene2: SceneNode = {
 const scene3: SceneNode = {
   type: 'frame',
   id: 'outer',
-  padding: 4,
+  padding: 8,
   color: randomColor(),
 
   width: 'resize-to-fit',
@@ -121,7 +121,7 @@ const scene3: SceneNode = {
     {
       type: 'frame',
       id: 'text-frame',
-      padding: 4,
+      padding: 8,
       color: randomColor(),
 
       width: 100,
@@ -149,22 +149,22 @@ const scene3: SceneNode = {
 }
 
 const scene4: SceneNode = {
-  type: 'frame', id: newGUID(), padding: 4, color: randomColor(),
+  type: 'frame', id: newGUID(), padding: 8, color: randomColor(),
 
   width: 'resize-to-fit',
   height: 'resize-to-fit',
   alignment: 'vertical',
 
   children: [
-    // {
-    //   type: 'text', id: newGUID(), width: 200, height: 'resize-to-fit',
-    //   text: 'test test test test test test test test test test test test test test test test test test test test'
-    // },
+    {
+      type: 'text', id: newGUID(), width: 200, height: 'resize-to-fit',
+      text: 'test test test test test test test test test test test test test test test test test test test test'
+    },
     {
       type: 'rectangle', id: newGUID(), width: 120, height: 80, color: randomColor()
     },
     {
-      type: 'frame', id: newGUID(), padding: 4, color: randomColor(),
+      type: 'frame', id: newGUID(), padding: 8, color: randomColor(),
     
       width: 'resize-to-fit',
       height: 'resize-to-fit',
@@ -172,7 +172,7 @@ const scene4: SceneNode = {
 
       children: [
         {
-          type: 'frame', id: newGUID(), padding: 4, color: randomColor(),
+          type: 'frame', id: newGUID(), padding: 8, color: randomColor(),
 
           width: 'resize-to-fit',
           height: 'resize-to-fit',
@@ -187,14 +187,11 @@ const scene4: SceneNode = {
             },
             {
               type: 'rectangle', id: newGUID(), width: 50, height: 30, color: randomColor()
-            },
-            {
-              type: 'rectangle', id: newGUID(), width: 20, height: 10, color: randomColor()
             }
           ]
         },
         {
-          type: 'frame', id: 'test-frame', padding: 4, color: randomColor(),
+          type: 'frame', id: 'test-frame', padding: 8, color: randomColor(),
 
           width: 'resize-to-fit',
           height: 'resize-to-fit',
@@ -211,13 +208,22 @@ const scene4: SceneNode = {
           ]
         },
         {
-          type: 'frame', id: newGUID(), padding: 4, color: randomColor(),
+          type: 'frame', id: newGUID(), padding: 8, color: randomColor(),
 
           width: 'resize-to-fit',
           height: 'resize-to-fit',
           alignment: 'vertical',
 
           children: [
+            {
+              type: 'rectangle', id: newGUID(), width: 40, height: 20, color: randomColor()
+            },
+            {
+              type: 'rectangle', id: newGUID(), width: 60, height: 30, color: randomColor()
+            },
+            {
+              type: 'rectangle', id: newGUID(), width: 20, height: 10, color: randomColor()
+            }
           ]
         }
       ]
@@ -243,15 +249,15 @@ function renderScene(scene: SceneNode, sceneLayout: FinalLayout) {
   render(scene, sceneLayout, ctx)
 }
 
-renderScene(scene4, computeLayoutViaRecursive(scene4))
 renderScene(scene4, computeLayoutViaImmediate(scene4))
+renderScene(scene4, computeLayoutViaRecursive(scene4))
 
-// canvasesEl?.appendChild(document.createElement('div'))
+canvasesEl?.appendChild(document.createElement('div'))
 
-// renderScene(scene2, computeLayoutViaRecursive(scene2))
-// renderScene(scene2, computeLayoutViaImmediate(scene2))
+renderScene(scene2, computeLayoutViaImmediate(scene2))
+renderScene(scene2, computeLayoutViaRecursive(scene2))
 
-// canvasesEl?.appendChild(document.createElement('div'))
+canvasesEl?.appendChild(document.createElement('div'))
 
-// renderScene(scene3, computeLayoutViaRecursive(scene3))
-// renderScene(scene3, computeLayoutViaImmediate(scene3))
+renderScene(scene3, computeLayoutViaImmediate(scene3))
+renderScene(scene3, computeLayoutViaRecursive(scene3))
