@@ -87,7 +87,22 @@ const scene1: SceneNode = {
       height: 100,
       alignment: 'vertical',
 
-      children: []
+      children: [
+        {
+          type: 'text',
+          id: newGUID(),
+          width: 'grow',
+          height: 'grow',
+          text: 'test test test test test'
+        },
+        {
+          type: 'text',
+          id: newGUID(),
+          width: 'grow',
+          height: 'grow',
+          text: 'test test test test test'
+        }
+      ]
     },
   ]
 }
