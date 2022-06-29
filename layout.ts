@@ -29,23 +29,18 @@ function nodesByDepth(root: SceneNode) {
   return result
 }
 
-function * childrenSortedByFixedResizeThenGrow(node: FrameNode) {
-  const isHorizontal = node.alignment === 'horizontal'
-  const main = isHorizontal ? 0 : 1
-  for (const child of node.children) {
-    const sizing = [child.width, child.height][main]
-    if (typeof sizing === 'number') {
+function * allNonGrowNodes(children: Array<SceneNode>, axis: 0 | 1) {
+  for (const child of children) {
+    const sizing = [child.width, child.height][axis]
+    if (typeof sizing === 'number' || sizing === 'resize-to-fit') {
       yield child
     }
   }
-  for (const child of node.children) {
-    const sizing = [child.width, child.height][main]
-    if (sizing === 'resize-to-fit') {
-      yield child
-    }
-  }
-  for (const child of node.children) {
-    const sizing = [child.width, child.height][main]
+}
+
+function * allGrowNodes( children: Array<SceneNode>, axis: 0 | 1) {
+  for (const child of children) {
+    const sizing = [child.width, child.height][axis]
     if (sizing === 'grow') {
       yield child
     }
@@ -217,7 +212,7 @@ export function computeLayoutViaImmediate(root: SceneNode): FinalLayout {
         const stretchCross = innerSize[cross]
 
         // Stretch children
-        for (const child of childrenSortedByFixedResizeThenGrow(node)) {
+        for (const child of node.children) {
           const mainSetting = [child.width, child.height][main]
           const crossSetting = [child.width, child.height][cross]
 
@@ -295,7 +290,7 @@ function measureLeaf(node: TextNode | RectangleNode, givenWidth: OptionalNumber,
 
 export function computeLayoutViaRecursive(root: SceneNode): FinalLayout {
   const layout: FinalLayout = {}
-  traverse(root, n => layout[n.id] = { x: 0, y: 0, width: undefined, height: undefined })
+  traverse(root, n => layout[n.id] = { x: 0, y: 0, size: [undefined, undefined] })
 
   const targetSizes: {[id: string]: {
     // parameters we computed layout with
@@ -375,9 +370,9 @@ export function computeLayoutViaRecursive(root: SceneNode): FinalLayout {
     let measuredInnerMainSize: OptionalNumber = undefined
 
     if (mainSetting === 'resize-to-fit') {
-      ///////////////////////////////////////////////////////////////////////////////////////////////////////////////
-      // Start measuring for a main-axis resize-to-fit container. We'll need to add the main sizes for each child. //
-      ///////////////////////////////////////////////////////////////////////////////////////////////////////////////
+      //////////////////////////////////////////////////////
+      // Measure for a main-axis resize-to-fit container. //
+      //////////////////////////////////////////////////////
 
       let sumOfChildrenMainSize = 0
       let maxOfChildrenCrossSize = 0
@@ -396,7 +391,7 @@ export function computeLayoutViaRecursive(root: SceneNode): FinalLayout {
             break;
           }
           case 'grow': {
-            throw new Error('no grow inside of resize')
+            throw new Error('grow inside of resize is illegal (implicit sizing not supported)')
           }
           default: {
             childMeasuredSize = computeInternal(child,
@@ -422,69 +417,54 @@ export function computeLayoutViaRecursive(root: SceneNode): FinalLayout {
       // Done! //
       ///////////
     } else {
-      /////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-      // Start measuring for a main-axis grow/fixed container. We'll need to compute the sizes of all grow children. //
-      /////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+      ////////////////////////////////////////////////////////////
+      // Measure children for a main-axis grow/fixed container. //
+      ////////////////////////////////////////////////////////////
 
-      // We need the main size of the container to compute the size of the grow children.
       let sumOfChildrenMainSize = 0
       let maxOfChildrenCrossSize = 0
       let measuredChildren = 0
 
-      // Then, size the non-grow children so we know the remaining available space.
-      for (const child of node.children) {
+      // First size the non-grow children so we can determine the remaining space for the grow children
+      for (const child of allNonGrowNodes(node.children, main)) {
         const childSize = [child.width, child.height]
-        let childMeasuredSize
-        switch (childSize[main]) {
-          case 'grow': {
-            break;
-          }
-          case 'resize-to-fit':
-          default: {
-            childMeasuredSize = computeInternal(child,
-              axesToWidthHeight(
-                node.alignment,
-                undefined, // child main-size depends on child contents
-                givenInnerSize[cross]
-              ), performLayout)
-            measuredChildren ++
-            if (childMeasuredSize[main] != null) {
-              sumOfChildrenMainSize += childMeasuredSize[main]
-            }
-            if (childMeasuredSize[cross] != null) {
-              maxOfChildrenCrossSize = Math.max(maxOfChildrenCrossSize, childMeasuredSize[cross])
-            }
-            break
-          }
+        const childMainSize = childSize[main]
+        if (childMainSize === 'grow') {
+          throw new Error('should have been skipped')
         }
+
+        const childMeasuredSize = computeInternal(child,
+          axesToWidthHeight(
+            node.alignment,
+            undefined, // child main-size depends on child contents
+            givenInnerSize[cross]
+          ), performLayout)
+
+        if (childMeasuredSize[main] != null) {
+          sumOfChildrenMainSize += childMeasuredSize[main]!
+        }
+        if (childMeasuredSize[cross] != null) {
+          maxOfChildrenCrossSize = Math.max(maxOfChildrenCrossSize, childMeasuredSize[cross]!)
+        }
+
+        measuredChildren ++
       }
 
       const availableMainSpace = givenInnerSize[main] != null ? givenInnerSize[main]! - sumOfChildrenMainSize : undefined
       const percentPerChild = 1 / (node.children.length - measuredChildren)
 
-      // Finally, we size the grow-children based on the remaining space.
-      for (const child of node.children) {
-        const childSize = [child.width, child.height]
-        let childMeasuredSize
-        switch (childSize[main]) {
-          case 'grow': {
-            childMeasuredSize = computeInternal(child,
-              axesToWidthHeight(
-                node.alignment,
-                // child main-size fills remaining space left by siblings
-                availableMainSpace != null ? availableMainSpace * percentPerChild : undefined,
-                givenInnerSize[cross]
-              ), performLayout)
+      // Now that we have remaining space for the grow children, size those
+      for (const child of allGrowNodes(node.children, main)) {
+        const childMeasuredSize = computeInternal(child,
+          axesToWidthHeight(
+            node.alignment,
+            // child main-size fills remaining space left by siblings
+            availableMainSpace != null ? availableMainSpace * percentPerChild : undefined,
+            givenInnerSize[cross]
+          ), performLayout)
 
-            if (childMeasuredSize[cross] != null) {
-              maxOfChildrenCrossSize = Math.max(maxOfChildrenCrossSize, childMeasuredSize[cross])
-            }
-            break;
-          }
-          case 'resize-to-fit':
-          default: {
-            break
-          }
+        if (childMeasuredSize[cross] != null) {
+          maxOfChildrenCrossSize = Math.max(maxOfChildrenCrossSize, childMeasuredSize[cross]!)
         }
       }
 

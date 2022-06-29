@@ -262,20 +262,20 @@ function renderScene(scene: SceneNode, sceneLayout: FinalLayout) {
   render(scene, sceneLayout, ctx)
 }
 
-// renderScene(scene1, computeLayoutViaImmediate(scene1))
-// renderScene(scene1, computeLayoutViaRecursive(scene1))
+renderScene(scene1, computeLayoutViaImmediate(scene1))
+renderScene(scene1, computeLayoutViaRecursive(scene1))
 
-// canvasesEl?.appendChild(document.createElement('div'))
+canvasesEl?.appendChild(document.createElement('div'))
 
 renderScene(scene2, computeLayoutViaImmediate(scene2))
 renderScene(scene2, computeLayoutViaRecursive(scene2))
 
-// canvasesEl?.appendChild(document.createElement('div'))
+canvasesEl?.appendChild(document.createElement('div'))
 
-// renderScene(scene3, computeLayoutViaImmediate(scene3))
-// renderScene(scene3, computeLayoutViaRecursive(scene3))
+renderScene(scene3, computeLayoutViaImmediate(scene3))
+renderScene(scene3, computeLayoutViaRecursive(scene3))
 
-// canvasesEl?.appendChild(document.createElement('div'))
+canvasesEl?.appendChild(document.createElement('div'))
 
-// renderScene(scene4, computeLayoutViaImmediate(scene4))
-// renderScene(scene4, computeLayoutViaRecursive(scene4))
+renderScene(scene4, computeLayoutViaImmediate(scene4))
+renderScene(scene4, computeLayoutViaRecursive(scene4))
