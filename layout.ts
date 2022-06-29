@@ -369,112 +369,59 @@ export function computeLayoutViaRecursive(root: SceneNode): FinalLayout {
     let measuredInnerCrossSize: OptionalNumber = undefined
     let measuredInnerMainSize: OptionalNumber = undefined
 
-    if (mainSetting === 'resize-to-fit') {
-      //////////////////////////////////////////////////////
-      // Measure for a main-axis resize-to-fit container. //
-      //////////////////////////////////////////////////////
+    let sumOfChildrenMainSize = 0
+    let maxOfChildrenCrossSize = 0
+    let measuredChildren = 0
 
-      let sumOfChildrenMainSize = 0
-      let maxOfChildrenCrossSize = 0
-
-      for (const child of node.children) {
-        const childSize = [child.width, child.height]
-        let childMeasuredSize
-        switch (childSize[main]) {
-          case 'resize-to-fit': {
-            childMeasuredSize = computeInternal(child,
-              axesToWidthHeight(
-                node.alignment,
-                undefined /* parent main size depends on child */,
-                givenInnerSize[cross]),
-              performLayout)
-            break;
-          }
-          case 'grow': {
-            throw new Error('grow inside of resize is illegal (implicit sizing not supported)')
-          }
-          default: {
-            childMeasuredSize = computeInternal(child,
-              axesToWidthHeight(
-                node.alignment,
-                undefined /* parent main size depends on child */,
-                givenInnerSize[cross]),
-              performLayout)
-            break
-          }
-        }
-        if (childMeasuredSize[main] != null) {
-          sumOfChildrenMainSize += childMeasuredSize[main]
-        }
-        if (childMeasuredSize[cross] != null) {
-          maxOfChildrenCrossSize = Math.max(maxOfChildrenCrossSize, childMeasuredSize[cross])
-        }
-      }
-      measuredInnerMainSize = mainSetting === 'resize-to-fit' ? sumOfChildrenMainSize : givenInnerSize[main]
-      measuredInnerCrossSize = crossSetting === 'resize-to-fit' ? maxOfChildrenCrossSize : givenInnerSize[cross]
-
-      ///////////
-      // Done! //
-      ///////////
-    } else {
-      ////////////////////////////////////////////////////////////
-      // Measure children for a main-axis grow/fixed container. //
-      ////////////////////////////////////////////////////////////
-
-      let sumOfChildrenMainSize = 0
-      let maxOfChildrenCrossSize = 0
-      let measuredChildren = 0
-
-      // First size the non-grow children so we can determine the remaining space for the grow children
-      for (const child of allNonGrowNodes(node.children, main)) {
-        const childSize = [child.width, child.height]
-        const childMainSize = childSize[main]
-        if (childMainSize === 'grow') {
-          throw new Error('should have been skipped')
-        }
-
-        const childMeasuredSize = computeInternal(child,
-          axesToWidthHeight(
-            node.alignment,
-            undefined, // child main-size depends on child contents
-            givenInnerSize[cross]
-          ), performLayout)
-
-        if (childMeasuredSize[main] != null) {
-          sumOfChildrenMainSize += childMeasuredSize[main]!
-        }
-        if (childMeasuredSize[cross] != null) {
-          maxOfChildrenCrossSize = Math.max(maxOfChildrenCrossSize, childMeasuredSize[cross]!)
-        }
-
-        measuredChildren ++
+    // First size the non-grow children so we can determine the remaining space for the grow children
+    for (const child of allNonGrowNodes(node.children, main)) {
+      const childSize = [child.width, child.height]
+      const childMainSize = childSize[main]
+      if (childMainSize === 'grow') {
+        throw new Error('should have been skipped')
       }
 
-      const availableMainSpace = givenInnerSize[main] != null ? givenInnerSize[main]! - sumOfChildrenMainSize : undefined
-      const percentPerChild = 1 / (node.children.length - measuredChildren)
+      const childMeasuredSize = computeInternal(child,
+        axesToWidthHeight(
+          node.alignment,
+          undefined, // child main-size depends on child contents
+          givenInnerSize[cross]
+        ), performLayout)
 
-      // Now that we have remaining space for the grow children, size those
-      for (const child of allGrowNodes(node.children, main)) {
-        const childMeasuredSize = computeInternal(child,
-          axesToWidthHeight(
-            node.alignment,
-            // child main-size fills remaining space left by siblings
-            availableMainSpace != null ? availableMainSpace * percentPerChild : undefined,
-            givenInnerSize[cross]
-          ), performLayout)
-
-        if (childMeasuredSize[cross] != null) {
-          maxOfChildrenCrossSize = Math.max(maxOfChildrenCrossSize, childMeasuredSize[cross]!)
-        }
+      if (childMeasuredSize[main] != null) {
+        sumOfChildrenMainSize += childMeasuredSize[main]!
+      }
+      if (childMeasuredSize[cross] != null) {
+        maxOfChildrenCrossSize = Math.max(maxOfChildrenCrossSize, childMeasuredSize[cross]!)
       }
 
-      measuredInnerMainSize = givenInnerSize[main]
-      measuredInnerCrossSize = crossSetting === 'resize-to-fit' ? maxOfChildrenCrossSize : givenInnerSize[cross]
-
-      ///////////
-      // Done! //
-      ///////////
+      measuredChildren ++
     }
+
+    if (mainSetting === 'resize-to-fit' && measuredChildren != node.children.length) {
+      throw new Error("we don't support grow children in resize-to-fit containers (implicit-size not supported)")
+    }
+
+    const availableMainSpace = givenInnerSize[main] != null ? givenInnerSize[main]! - sumOfChildrenMainSize : undefined
+    const percentPerChild = 1 / (node.children.length - measuredChildren)
+
+    // Now that we have remaining space for the grow children, size those
+    for (const child of allGrowNodes(node.children, main)) {
+      const childMeasuredSize = computeInternal(child,
+        axesToWidthHeight(
+          node.alignment,
+          // child main-size fills remaining space left by siblings
+          availableMainSpace != null ? availableMainSpace * percentPerChild : undefined,
+          givenInnerSize[cross]
+        ), performLayout)
+
+      if (childMeasuredSize[cross] != null) {
+        maxOfChildrenCrossSize = Math.max(maxOfChildrenCrossSize, childMeasuredSize[cross]!)
+      }
+    }
+
+    measuredInnerMainSize = mainSetting === 'resize-to-fit' ? sumOfChildrenMainSize : givenInnerSize[main]
+    measuredInnerCrossSize = crossSetting === 'resize-to-fit' ? maxOfChildrenCrossSize : givenInnerSize[cross]
 
     const measuredMainSize = measuredInnerMainSize != null ? measuredInnerMainSize + node.padding * 2 : undefined
     const measuredCrossSize = measuredInnerCrossSize != null ? measuredInnerCrossSize + node.padding * 2 : undefined
