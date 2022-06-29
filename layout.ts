@@ -257,7 +257,7 @@ export function computeLayoutViaRecursive(root: SceneNode): FinalLayout {
 
   const depths = Object.fromEntries(nodesByDepth(root).map(v => [v[0].id, v[1]]))
 
-  function computeLayout(
+  function computeInternal(
     node: SceneNode, givenSize: [OptionalNumber, OptionalNumber],
     performLayout: boolean
   ): [OptionalNumber, OptionalNumber] {
@@ -342,7 +342,7 @@ export function computeLayoutViaRecursive(root: SceneNode): FinalLayout {
         let childMeasuredSize
         switch (childSize[main]) {
           case 'resize-to-fit': {
-            childMeasuredSize = computeLayout(child,
+            childMeasuredSize = computeInternal(child,
               mainAndCross(
                 undefined /* parent main size depends on child */,
                 givenInnerSize[cross]),
@@ -353,7 +353,7 @@ export function computeLayoutViaRecursive(root: SceneNode): FinalLayout {
             throw new Error('no grow inside of resize')
           }
           default: {
-            childMeasuredSize = computeLayout(child,
+            childMeasuredSize = computeInternal(child,
               mainAndCross(
                 undefined /* parent main size depends on child */,
                 givenInnerSize[cross]),
@@ -394,7 +394,7 @@ export function computeLayoutViaRecursive(root: SceneNode): FinalLayout {
           }
           case 'resize-to-fit':
           default: {
-            childMeasuredSize = computeLayout(child,
+            childMeasuredSize = computeInternal(child,
               mainAndCross(
                 undefined, // child main-size depends on child contents
                 givenInnerSize[cross]
@@ -420,7 +420,7 @@ export function computeLayoutViaRecursive(root: SceneNode): FinalLayout {
         let childMeasuredSize
         switch (childSize[main]) {
           case 'grow': {
-            childMeasuredSize = computeLayout(child,
+            childMeasuredSize = computeInternal(child,
               mainAndCross(
                 // child main-size fills remaining space left by siblings
                 availableMainSpace != null ? availableMainSpace * percentPerChild : undefined,
@@ -466,7 +466,7 @@ export function computeLayoutViaRecursive(root: SceneNode): FinalLayout {
     let y = node.padding
 
     for (const child of node.children) {
-      const [childWidth, childHeight] = computeLayout(
+      const [childWidth, childHeight] = computeInternal(
         child,
         [
           targetSizes[child.id].givenWidth,
@@ -495,14 +495,14 @@ export function computeLayoutViaRecursive(root: SceneNode): FinalLayout {
 
   console.warn('first pass (recursive)')
 
-  const [firstPassWidth, firstPassHeight] = computeLayout(
+  const [firstPassWidth, firstPassHeight] = computeInternal(
     root,
     [numberOrUndefined(root.width), numberOrUndefined(root.height)],
     false)
 
   console.warn('second pass (recursive)')
 
-  const [rootWidth, rootHeight] = computeLayout(
+  const [rootWidth, rootHeight] = computeInternal(
     root,
     [firstPassWidth, firstPassHeight],
     true)
