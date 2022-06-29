@@ -13,23 +13,24 @@ const randomColor = (): string => {
 function render(root: SceneNode, sceneLayout: FinalLayout, ctx: CanvasRenderingContext2D) {
   const renderSubtree = (node: SceneNode) => {
     const nodeLayout = sceneLayout[node.id];
-    if (nodeLayout == null || nodeLayout.width == null || nodeLayout.height == null) {
+    const [nodeWidth, nodeHeight] = nodeLayout.size
+    if (nodeLayout == null || nodeWidth == null || nodeHeight == null) {
       console.error('no layout found for', node.id)
       return
     }
 
     if (node.type === 'frame') {
       ctx.fillStyle = node.color;
-      ctx.fillRect(nodeLayout.x, nodeLayout.y, nodeLayout.width, nodeLayout.height);
+      ctx.fillRect(nodeLayout.x, nodeLayout.y, nodeWidth, nodeHeight);
     } else if (node.type === 'rectangle') {
       ctx.fillStyle = node.color;
-      ctx.fillRect(nodeLayout.x, nodeLayout.y, nodeLayout.width, nodeLayout.height);
+      ctx.fillRect(nodeLayout.x, nodeLayout.y, nodeWidth, nodeHeight);
     } else if (node.type === 'text') {
       ctx.fillStyle = '#fafafa';
-      ctx.fillRect(nodeLayout.x, nodeLayout.y, nodeLayout.width, nodeLayout.height);
+      ctx.fillRect(nodeLayout.x, nodeLayout.y, nodeWidth, nodeHeight);
       ctx.fillStyle = '#000';
 
-      const textLayout = getTextLayout(node.text, nodeLayout.width);
+      const textLayout = getTextLayout(node.text, nodeWidth);
       for (let i = 0; i < textLayout.lines.length; i++) {
         const line = textLayout.lines[i];
         ctx.fillText(line, nodeLayout.x, nodeLayout.y + textLayout.lineHeight * (i + 0.8));
@@ -57,24 +58,36 @@ const scene1: SceneNode = {
   padding: 8,
   color: randomColor(),
 
-  width: 'resize-to-fit',
+  width: 200,
   height: 'resize-to-fit',
-  alignment: 'vertical',
+  alignment: 'horizontal',
 
   children: [
     {
       type: 'rectangle',
       id: newGUID(),
-      width: 100,
-      height: 80,
+      width: 'grow',
+      height: 'grow',
       color: randomColor(),
     },
     {
-      type: 'rectangle',
+      type: 'text',
       id: newGUID(),
-      width: 100,
-      height: 80,
+      width: 'grow',
+      height: 'grow',
+      text: 'test test test test test test test test test'
+    },
+    {
+      type: 'frame',
+      id: newGUID(),
+      padding: 8,
       color: randomColor(),
+
+      width: 'grow',
+      height: 100,
+      alignment: 'vertical',
+
+      children: []
     },
   ]
 }
@@ -237,7 +250,7 @@ function renderScene(scene: SceneNode, sceneLayout: FinalLayout) {
   // render via measure / arrange pass
   var el = document.createElement('canvas');
   el.width = 300;
-  el.height = 500;
+  el.height = 300;
   canvasesEl?.appendChild(el)
 
   // draw the background
@@ -249,15 +262,20 @@ function renderScene(scene: SceneNode, sceneLayout: FinalLayout) {
   render(scene, sceneLayout, ctx)
 }
 
-renderScene(scene4, computeLayoutViaImmediate(scene4))
-renderScene(scene4, computeLayoutViaRecursive(scene4))
+// renderScene(scene1, computeLayoutViaImmediate(scene1))
+// renderScene(scene1, computeLayoutViaRecursive(scene1))
 
-canvasesEl?.appendChild(document.createElement('div'))
+// canvasesEl?.appendChild(document.createElement('div'))
 
 renderScene(scene2, computeLayoutViaImmediate(scene2))
 renderScene(scene2, computeLayoutViaRecursive(scene2))
 
-canvasesEl?.appendChild(document.createElement('div'))
+// canvasesEl?.appendChild(document.createElement('div'))
 
-renderScene(scene3, computeLayoutViaImmediate(scene3))
-renderScene(scene3, computeLayoutViaRecursive(scene3))
+// renderScene(scene3, computeLayoutViaImmediate(scene3))
+// renderScene(scene3, computeLayoutViaRecursive(scene3))
+
+// canvasesEl?.appendChild(document.createElement('div'))
+
+// renderScene(scene4, computeLayoutViaImmediate(scene4))
+// renderScene(scene4, computeLayoutViaRecursive(scene4))

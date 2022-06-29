@@ -1,4 +1,4 @@
-import { FinalLayout, getTextLayout, RectangleNode, SceneNode, TextNode } from "./scene"
+import { FinalLayout, FrameNode, getTextLayout, RectangleNode, SceneNode, TextNode } from "./scene"
 
 
 
@@ -27,6 +27,38 @@ function nodesByDepth(root: SceneNode) {
 
   traverse(root, 0)
   return result
+}
+
+function * childrenSortedByFixedResizeThenGrow(node: FrameNode) {
+  const isHorizontal = node.alignment === 'horizontal'
+  const main = isHorizontal ? 0 : 1
+  for (const child of node.children) {
+    const sizing = [child.width, child.height][main]
+    if (typeof sizing === 'number') {
+      yield child
+    }
+  }
+  for (const child of node.children) {
+    const sizing = [child.width, child.height][main]
+    if (sizing === 'resize-to-fit') {
+      yield child
+    }
+  }
+  for (const child of node.children) {
+    const sizing = [child.width, child.height][main]
+    if (sizing === 'grow') {
+      yield child
+    }
+  }
+}
+
+function axesToWidthHeight<T>(alignment: 'horizontal' | 'vertical', main: T, cross: T): [T, T] {
+  const isHorizontal = alignment === 'horizontal'
+  if (isHorizontal) {
+    return [main, cross]
+  } else {
+    return [cross, main]
+  }
 }
 
 function measureText(
@@ -79,7 +111,7 @@ export function computeLayoutViaImmediate(root: SceneNode): FinalLayout {
 
   const finalLayout: FinalLayout = {}
   for (const [node, _] of bottomUpNodes) {
-    finalLayout[node.id] = { x: 0, y: 0, width: undefined, height: undefined }
+    finalLayout[node.id] = { x: 0, y: 0, size: [undefined, undefined] }
   }
 
   function bottomUp() {
@@ -99,8 +131,7 @@ export function computeLayoutViaImmediate(root: SceneNode): FinalLayout {
           finalLayout[child.id].x = x
           finalLayout[child.id].y = y
 
-          let childWidth = finalLayout[child.id].width
-          let childHeight = finalLayout[child.id].height
+          let [childWidth, childHeight] = finalLayout[child.id].size
 
           if (typeof child.width === 'number' && childWidth == null) {
             childWidth = child.width
@@ -115,8 +146,7 @@ export function computeLayoutViaImmediate(root: SceneNode): FinalLayout {
             childHeight = textHeight
           }
 
-          finalLayout[child.id].width = childWidth
-          finalLayout[child.id].height = childHeight
+          finalLayout[child.id].size = [childWidth, childHeight]
 
           // make sure we have a value here
           childWidth = childWidth != null ? childWidth : 0
@@ -135,54 +165,77 @@ export function computeLayoutViaImmediate(root: SceneNode): FinalLayout {
         }
 
         if (node.width === 'resize-to-fit') {
-          finalLayout[node.id].width = childrenWidth + 2 * node.padding
+          finalLayout[node.id].size[0] = childrenWidth + 2 * node.padding
         } else if (node.width === 'grow') {
           // need to wait till our parent is sized
         } else {
-          finalLayout[node.id].width = node.width
+          finalLayout[node.id].size[0] = node.width
         }
 
         if (node.height === 'resize-to-fit') {
-          finalLayout[node.id].height = childrenHeight + 2 * node.padding
+          finalLayout[node.id].size[1] = childrenHeight + 2 * node.padding
         } else if (node.height === 'grow') {
           // need to wait till our parent is sized
         } else {
-          finalLayout[node.id].height = node.height
+          finalLayout[node.id].size[1] = node.height
         }
       }
 
-      console.log('  '.repeat(depth), 'bottom-up on ', node.id, '=>', finalLayout[node.id].width, ',', finalLayout[node.id].height)
+      console.log('  '.repeat(depth), 'bottom-up on ', node.id, '=>', finalLayout[node.id].size)
     }
   }
 
   function topDown() {
     for (const [node, depth] of topDownNodes) {
       if (node.type === 'frame') {
-        const {width, height} = finalLayout[node.id]
+        const [width, height] = finalLayout[node.id].size
         if (width == null || height == null) {
           throw new Error("null values")
         }
 
-        const stretchWidth = width - node.padding * 2
-        const stretchHeight = height - node.padding * 2
+        const isHorizontal = node.alignment === 'horizontal'
+        const main = isHorizontal ? 0 : 1
+        const cross = isHorizontal ? 1 : 0
+
+        const innerSize = [width - node.padding * 2, height - node.padding * 2]
+
+        let availableMainSpace = innerSize[main]
+        let numChildrenMainGrow = 0
+        for (const child of node.children) {
+          const mainSetting = [child.width, child.height][main]
+          if (mainSetting === 'grow') {
+            numChildrenMainGrow ++
+          } else {
+            const childMainSize = finalLayout[child.id].size[main]
+            if (childMainSize != null) {
+              availableMainSpace -= childMainSize
+            }
+          }
+        }
+
+        const stretchMain = availableMainSpace / numChildrenMainGrow
+        const stretchCross = innerSize[cross]
 
         // Stretch children
-        for (const child of node.children) {
-          if (child.width === 'grow') {
-            finalLayout[child.id].width = stretchWidth
+        for (const child of childrenSortedByFixedResizeThenGrow(node)) {
+          const mainSetting = [child.width, child.height][main]
+          const crossSetting = [child.width, child.height][cross]
+
+          if (mainSetting === 'grow') {
+            finalLayout[child.id].size[main] = stretchMain
           }
-          if (child.height === 'grow') {
-            finalLayout[child.id].height = stretchHeight
+          if (crossSetting === 'grow') {
+            finalLayout[child.id].size[cross] = stretchCross
           }
           if (child.type === 'text' && child.width === 'grow' && child.height === 'resize-to-fit') {
-            const [textWidth, textHeight] = measureText(child, stretchWidth, stretchHeight)
-            finalLayout[child.id].width = stretchWidth
-            finalLayout[child.id].height = textHeight
+            const [stretchWidth, _] = axesToWidthHeight(node.alignment, stretchMain, stretchCross)
+            const [textWidth, textHeight] = measureText(child, stretchWidth, undefined)
+            finalLayout[child.id].size = [stretchWidth, textHeight]
           }
         }
       }
 
-      console.log('  '.repeat(depth), 'top-down on ', node.id, '=>', finalLayout[node.id].width, ',', finalLayout[node.id].height)
+      console.log('  '.repeat(depth), 'top-down on ', node.id, '=>', finalLayout[node.id].size)
     }
   }
 
@@ -316,14 +369,6 @@ export function computeLayoutViaRecursive(root: SceneNode): FinalLayout {
     const mainSetting = [node.width, node.height][main]
     const crossSetting = [node.width, node.height][cross]
 
-    function mainAndCross<T>(main: T, cross: T): [T, T] {
-      if (isHorizontal) {
-        return [main, cross]
-      } else {
-        return [cross, main]
-      }
-    }
-
     let givenInnerSize = givenSize.map(v => v ? v - node.padding * 2 : undefined)
 
     let measuredInnerCrossSize: OptionalNumber = undefined
@@ -343,7 +388,8 @@ export function computeLayoutViaRecursive(root: SceneNode): FinalLayout {
         switch (childSize[main]) {
           case 'resize-to-fit': {
             childMeasuredSize = computeInternal(child,
-              mainAndCross(
+              axesToWidthHeight(
+                node.alignment,
                 undefined /* parent main size depends on child */,
                 givenInnerSize[cross]),
               performLayout)
@@ -354,7 +400,8 @@ export function computeLayoutViaRecursive(root: SceneNode): FinalLayout {
           }
           default: {
             childMeasuredSize = computeInternal(child,
-              mainAndCross(
+              axesToWidthHeight(
+                node.alignment,
                 undefined /* parent main size depends on child */,
                 givenInnerSize[cross]),
               performLayout)
@@ -395,7 +442,8 @@ export function computeLayoutViaRecursive(root: SceneNode): FinalLayout {
           case 'resize-to-fit':
           default: {
             childMeasuredSize = computeInternal(child,
-              mainAndCross(
+              axesToWidthHeight(
+                node.alignment,
                 undefined, // child main-size depends on child contents
                 givenInnerSize[cross]
               ), performLayout)
@@ -412,7 +460,7 @@ export function computeLayoutViaRecursive(root: SceneNode): FinalLayout {
       }
 
       const availableMainSpace = givenInnerSize[main] != null ? givenInnerSize[main]! - sumOfChildrenMainSize : undefined
-      const percentPerChild = (node.children.length - measuredChildren) / node.children.length
+      const percentPerChild = 1 / (node.children.length - measuredChildren)
 
       // Finally, we size the grow-children based on the remaining space.
       for (const child of node.children) {
@@ -421,7 +469,8 @@ export function computeLayoutViaRecursive(root: SceneNode): FinalLayout {
         switch (childSize[main]) {
           case 'grow': {
             childMeasuredSize = computeInternal(child,
-              mainAndCross(
+              axesToWidthHeight(
+                node.alignment,
                 // child main-size fills remaining space left by siblings
                 availableMainSpace != null ? availableMainSpace * percentPerChild : undefined,
                 givenInnerSize[cross]
@@ -449,7 +498,7 @@ export function computeLayoutViaRecursive(root: SceneNode): FinalLayout {
 
     const measuredMainSize = measuredInnerMainSize != null ? measuredInnerMainSize + node.padding * 2 : undefined
     const measuredCrossSize = measuredInnerCrossSize != null ? measuredInnerCrossSize + node.padding * 2 : undefined
-    const [measuredWidth, measuredHeight] = mainAndCross(measuredMainSize, measuredCrossSize)
+    const [measuredWidth, measuredHeight] = axesToWidthHeight(node.alignment, measuredMainSize, measuredCrossSize)
 
     console.log(' '.repeat(2 * depths[node.id]), 'measured', node.id, 'of type', node.type, '===>', measuredWidth, ',', measuredHeight)
 
@@ -477,7 +526,7 @@ export function computeLayoutViaRecursive(root: SceneNode): FinalLayout {
       }
 
       layout[child.id] = {
-        x, y, width: childWidth, height: childHeight
+        x, y, size: [childWidth, childHeight]
       }
 
       x += node.alignment === 'horizontal' ? childWidth : 0
@@ -508,7 +557,7 @@ export function computeLayoutViaRecursive(root: SceneNode): FinalLayout {
     true)
 
   layout[root.id] = {
-    x: 0, y: 0, width: rootWidth, height: rootHeight
+    x: 0, y: 0, size: [rootWidth, rootHeight]
   }
   
   return layout

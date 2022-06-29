@@ -47,8 +47,7 @@ export interface FinalLayout {
   [id: string]: {
     x: number,
     y: number,
-    width: number | undefined,
-    height: number | undefined
+    size: [number | undefined, number | undefined]
   }
 }
 
